@@ -4,7 +4,7 @@ A personal AI assistant framework. Provider-agnostic. Clear architecture. Your d
 
 ## Philosophy
 
-Inspired by [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure), [Ren](https://github.com/erskingardner/ren), and [moltbot](https://github.com/moltbot/moltbot), but with a focus on:
+Inspired by [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure), [Ren](https://github.com/erskingardner/ren), and [openclaw](https://github.com/openclaw/openclaw), but with a focus on:
 
 1. **Deterministic First** — Do as much as possible in code before involving the model
 2. **Local First** — No telemetry, no required cloud services, works with local models
@@ -383,7 +383,7 @@ This project learns from:
 - **[PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure)** — Hook system, skill patterns, memory architecture
 - **[PAI-OpenCode](https://github.com/Steffen025/pai-opencode)** — PAI port to opencode, hooks→plugins conversion
 - **[Ren](https://github.com/erskingardner/ren)** — Deterministic-first philosophy, clean directory structure
-- **[moltbot](https://github.com/moltbot/moltbot)** — Gateway pattern, typed workflows, multi-channel approach
+- **[openclaw](https://github.com/openclaw/openclaw)** — Gateway pattern, typed workflows, multi-channel approach
 - **[opencode](https://github.com/anomalyco/opencode)** — Provider abstraction, plugin architecture
 
 ## License
