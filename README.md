@@ -339,14 +339,24 @@ For Phase 0, security relies on the underlying provider's permission system (Cla
 - [ ] Directory structure (`~/.config/shaka/{user,system}`)
 - [ ] One tool: `git-status` (proves the pattern)
 - [ ] MCP server (`shaka mcp serve`) for Claude Code
-- [ ] Event bus with SessionStart hook
-- [ ] Claude Code adapter (subprocess shim)
+- [x] Event bus with SessionStart hook — **validated via experiments**
+- [x] Claude Code adapter (subprocess shim) — **validated via experiments**
+
+**Experiments completed:**
+
+| Experiment             | Result | Key Finding                                               |
+| ---------------------- | ------ | --------------------------------------------------------- |
+| `01-claude-hooks`      | ✅      | Claude Code hooks work via subprocess + JSON stdin        |
+| `02-opencode-plugin`   | ✅      | opencode plugins work via in-process TypeScript           |
+| `03-context-injection` | ✅      | Both providers support context injection (different APIs) |
+
+See `experiments/` and `plans/hooks.md` for details.
 
 ### Phase 1: Skills & Commands
 
 - [ ] Command system with YAML frontmatter
 - [ ] Skill system (SKILL.md + context files)
-- [ ] opencode hook adapter
+- [x] opencode hook adapter — **validated via experiments**
 
 ### Phase 2: Agents & Memory
 
