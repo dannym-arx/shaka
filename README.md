@@ -24,6 +24,7 @@ Inspired by [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure),
 │   ├── goals.md              # Specific objectives
 │   ├── projects.md           # Current work
 │   └── challenges.md         # Problems you're tackling
+│   └── ...
 │
 ├── memory/                   # What Shaka LEARNS about you (dynamic)
 │   └── ...                   # Session summaries, patterns, etc.
@@ -324,6 +325,19 @@ shaka tool run git-status
 shaka memory search "project architecture"
 ```
 
+### Session Management
+
+Shaka sessions persist across CLI invocations, enabling gateway patterns and background workers:
+
+```bash
+shaka start --title "Auth feature"    # Start new session
+shaka resume                          # Resume last session
+shaka run --session <id> "message"    # Send to specific session (non-interactive)
+shaka sessions                        # List sessions
+```
+
+Both providers support session attachment via `--continue`/`--resume` (Claude Code) and `--session` (opencode). See `plans/session-management.md` for architecture details.
+
 ## Security Model
 
 Security through explicit capability grants, not permission prompts. The detailed permission model is TBD, but the principle is: define what's allowed upfront rather than prompting at runtime.
@@ -349,21 +363,24 @@ For Phase 0, security relies on the underlying provider's permission system (Cla
 - [ ] CLI entry point (`shaka init`, `shaka doctor`)
 - [ ] Directory structure (`~/.config/shaka/{user,system}`)
 - [ ] One tool: `git-status` (proves the pattern)
-- [ ] MCP server (`shaka mcp serve`) for Claude Code
+- [x] MCP server (`shaka mcp serve`) for Claude Code — **validated via experiments**
 - [x] Event bus with SessionStart hook — **validated via experiments**
 - [x] Claude Code adapter (subprocess shim) — **validated via experiments**
+- [x] Session attachment (non-interactive CLI) — **validated via experiments**
 
 **Experiments completed:**
 
-| Experiment             | Result | Key Finding                                               |
-| ---------------------- | ------ | --------------------------------------------------------- |
-| `01-claude-hooks`      | ✅     | Claude Code hooks work via subprocess + JSON stdin        |
-| `02-opencode-plugin`   | ✅     | opencode plugins work via in-process TypeScript           |
-| `03-context-injection` | ✅     | Both providers support context injection (different APIs) |
-| `04-error-blocking`    | ✅     | Both providers support blocking tools (exit 2 / throw)    |
-| `05-subagent-events`   | ✅     | CC: native SubagentStart/Stop; OC: polyfill via Task tool |
+| Experiment              | Result | Key Finding                                                 |
+| ----------------------- | ------ | ----------------------------------------------------------- |
+| `01-claude-hooks`       | ✅     | Claude Code hooks work via subprocess + JSON stdin          |
+| `02-opencode-plugin`    | ✅     | opencode plugins work via in-process TypeScript             |
+| `03-context-injection`  | ✅     | Both providers support context injection (different APIs)   |
+| `04-error-blocking`     | ✅     | Both providers support blocking tools (exit 2 / throw)      |
+| `05-subagent-events`    | ✅     | CC: native SubagentStart/Stop; OC: polyfill via Task tool   |
+| `06-session-attachment` | ✅     | Both support session resume + non-interactive attachment    |
+| `07-mcp-server`         | ✅     | MCP works + unified tool format (opencode → both providers) |
 
-See `experiments/` and `plans/hooks.md` for details.
+See `experiments/` and `plans/hooks.md` for details. Session management design in `plans/session-management.md`.
 
 ### Phase 1: Skills & Commands
 
