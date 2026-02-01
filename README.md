@@ -296,6 +296,17 @@ Shaka abstracts this with a common event bus:
 2. Thin adapters (~10 lines each) translate provider events to Shaka events
 3. Same behavior regardless of which AI assistant you use
 
+### Feature Polyfills
+
+Some features exist in one provider but not the other. Shaka polyfills these gaps:
+
+| Feature              | Claude Code                 | opencode | Shaka Polyfill           |
+| -------------------- | --------------------------- | -------- | ------------------------ |
+| Subagent events      | Native `SubagentStart/Stop` | ❌       | Detect via Task tool     |
+| Background subagents | `run_in_background=true`    | ❌       | Spawn `opencode run` CLI |
+
+**Background subagent polyfill:** opencode's Task tool lacks background support, so Shaka provides tools that spawn `opencode run` as a subprocess. Inspired by [opencode-background](https://github.com/zenobi-us/opencode-background). See `plans/hooks.md` for implementation details.
+
 ## Interfaces
 
 ### TUI (Primary)
@@ -346,9 +357,11 @@ For Phase 0, security relies on the underlying provider's permission system (Cla
 
 | Experiment             | Result | Key Finding                                               |
 | ---------------------- | ------ | --------------------------------------------------------- |
-| `01-claude-hooks`      | ✅      | Claude Code hooks work via subprocess + JSON stdin        |
-| `02-opencode-plugin`   | ✅      | opencode plugins work via in-process TypeScript           |
-| `03-context-injection` | ✅      | Both providers support context injection (different APIs) |
+| `01-claude-hooks`      | ✅     | Claude Code hooks work via subprocess + JSON stdin        |
+| `02-opencode-plugin`   | ✅     | opencode plugins work via in-process TypeScript           |
+| `03-context-injection` | ✅     | Both providers support context injection (different APIs) |
+| `04-error-blocking`    | ✅     | Both providers support blocking tools (exit 2 / throw)    |
+| `05-subagent-events`   | ✅     | CC: native SubagentStart/Stop; OC: polyfill via Task tool |
 
 See `experiments/` and `plans/hooks.md` for details.
 
@@ -395,6 +408,7 @@ This project learns from:
 - **[Ren](https://github.com/erskingardner/ren)** — Deterministic-first philosophy, clean directory structure
 - **[openclaw](https://github.com/openclaw/openclaw)** — Gateway pattern, typed workflows, multi-channel approach
 - **[opencode](https://github.com/anomalyco/opencode)** — Provider abstraction, plugin architecture
+- **[Claude Code](https://github.com/anthropics/claude-code)** — Hook system, context injection, subprocess model
 
 ## License
 
