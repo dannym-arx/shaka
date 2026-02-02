@@ -52,17 +52,13 @@ async function detectCLIs(): Promise<{ claude: boolean; opencode: boolean }> {
 // CLI-Based Inference (preferred)
 // ---------------------------------------------------------------------------
 
-async function callClaudeCLI(
-  options: InferenceOptions
-): Promise<InferenceResult> {
+async function callClaudeCLI(options: InferenceOptions): Promise<InferenceResult> {
   const prompt = options.systemPrompt
     ? `${options.systemPrompt}\n\n${options.userPrompt}`
     : options.userPrompt;
 
   const maxTokens = options.maxTokens || 256;
-  const result = await Bun.$`claude -p ${prompt} --max-tokens ${maxTokens}`
-    .quiet()
-    .nothrow();
+  const result = await Bun.$`claude -p ${prompt} --max-tokens ${maxTokens}`.quiet().nothrow();
 
   if (result.exitCode !== 0) {
     return {
@@ -76,9 +72,7 @@ async function callClaudeCLI(
   return parseResponse(text, options.expectJson, "claude-cli");
 }
 
-async function callOpenCodeCLI(
-  options: InferenceOptions
-): Promise<InferenceResult> {
+async function callOpenCodeCLI(options: InferenceOptions): Promise<InferenceResult> {
   const prompt = options.systemPrompt
     ? `${options.systemPrompt}\n\n${options.userPrompt}`
     : options.userPrompt;
@@ -102,11 +96,7 @@ async function callOpenCodeCLI(
 // Response Parsing
 // ---------------------------------------------------------------------------
 
-function parseResponse(
-  text: string,
-  expectJson?: boolean,
-  provider?: string
-): InferenceResult {
+function parseResponse(text: string, expectJson?: boolean, provider?: string): InferenceResult {
   if (!expectJson) {
     return { success: true, text, provider };
   }
@@ -134,9 +124,7 @@ function parseResponse(
  * Tries Claude CLI first, then OpenCode CLI.
  * Both handle their own authentication — no API keys needed.
  */
-export async function inference(
-  options: InferenceOptions
-): Promise<InferenceResult> {
+export async function inference(options: InferenceOptions): Promise<InferenceResult> {
   const clis = await detectCLIs();
 
   if (clis.claude) {

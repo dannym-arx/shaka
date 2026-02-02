@@ -21,8 +21,7 @@ import { inference } from "../tools/inference";
 
 export const HOOK_VERSION = "0.4.0";
 
-const SHAKA_HOME =
-  process.env.SHAKA_HOME || `${process.env.HOME}/.config/shaka`;
+const SHAKA_HOME = process.env.SHAKA_HOME || `${process.env.HOME}/.config/shaka`;
 
 // Initialize Eta with templates directory
 const eta = new Eta({
@@ -263,24 +262,21 @@ async function classifyPrompt(prompt: string): Promise<ClassificationResult> {
 /**
  * Build reminder from template
  */
-async function buildReminder(
-  result: ClassificationResult,
-  assistantName: string
-): Promise<string> {
+async function buildReminder(result: ClassificationResult, assistantName: string): Promise<string> {
   const capabilities = await discoverCapabilities();
   const thinkingTools = await discoverThinkingTools();
 
   // Map capability keys to full capability info
   const selectedCaps = result.capabilities
     .map((key) => capabilities.find((c) => c.key === key))
-    .filter(Boolean)
-    .map((c) => ({ name: c!.name, agents: c!.agents }));
+    .filter((c): c is Capability => c !== undefined)
+    .map((c) => ({ name: c.name, agents: c.agents }));
 
   // Map thinking tool keys to full tool info
   const selectedTools = result.thinking
     .map((key) => thinkingTools.find((t) => t.key === key))
-    .filter(Boolean)
-    .map((t) => ({ name: t!.name, description: t!.description }));
+    .filter((t): t is ThinkingTool => t !== undefined)
+    .map((t) => ({ name: t.name, description: t.description }));
 
   const data: TemplateData = {
     assistantName,
@@ -306,10 +302,7 @@ async function main() {
   try {
     // Skip for subagents
     const claudeProjectDir = process.env.CLAUDE_PROJECT_DIR || "";
-    if (
-      claudeProjectDir.includes("/.claude/Agents/") ||
-      process.env.CLAUDE_AGENT_TYPE
-    ) {
+    if (claudeProjectDir.includes("/.claude/Agents/") || process.env.CLAUDE_AGENT_TYPE) {
       process.exit(0);
     }
 

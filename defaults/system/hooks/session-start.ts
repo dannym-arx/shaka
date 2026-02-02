@@ -11,8 +11,7 @@
 
 export const HOOK_VERSION = "0.1.0";
 
-const SHAKA_HOME =
-  process.env.SHAKA_HOME || `${process.env.HOME}/.config/shaka`;
+const SHAKA_HOME = process.env.SHAKA_HOME || `${process.env.HOME}/.config/shaka`;
 
 interface Config {
   version?: string;
@@ -33,7 +32,7 @@ async function loadFile(relativePath: string): Promise<string | null> {
     const customPath = `${SHAKA_HOME}/customizations/${basename}`;
     const customFile = Bun.file(customPath);
     if (await customFile.exists()) {
-      console.error(`  (using customization override)`);
+      console.error("  (using customization override)");
       return customFile.text();
     }
   }
