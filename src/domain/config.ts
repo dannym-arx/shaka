@@ -1,10 +1,14 @@
 /**
  * Shaka configuration types and utilities.
+ *
+ * The source of truth for default config is defaults/config.json.
+ * This file defines the TypeScript interface and validation.
  */
 
 import { type Result, err, ok } from "./result";
 
 export interface ShakaConfig {
+  readonly version: string;
   readonly reasoning: {
     readonly enabled: boolean;
   };
@@ -16,21 +20,11 @@ export interface ShakaConfig {
       readonly enabled: boolean;
     };
   };
-}
-
-export function createDefaultConfig(): ShakaConfig {
-  return {
-    reasoning: {
-      enabled: true,
-    },
-    providers: {
-      claude: {
-        enabled: false,
-      },
-      opencode: {
-        enabled: false,
-      },
-    },
+  readonly assistant: {
+    readonly name: string;
+  };
+  readonly principal: {
+    readonly name: string;
   };
 }
 
@@ -41,12 +35,24 @@ export function validateConfig(config: unknown): Result<ShakaConfig, Error> {
 
   const c = config as Record<string, unknown>;
 
+  if (typeof c.version !== "string") {
+    return err(new Error("Config must have version string"));
+  }
+
   if (!c.reasoning || typeof c.reasoning !== "object") {
     return err(new Error("Config must have reasoning section"));
   }
 
   if (!c.providers || typeof c.providers !== "object") {
     return err(new Error("Config must have providers section"));
+  }
+
+  if (!c.assistant || typeof c.assistant !== "object") {
+    return err(new Error("Config must have assistant section"));
+  }
+
+  if (!c.principal || typeof c.principal !== "object") {
+    return err(new Error("Config must have principal section"));
   }
 
   return ok(config as ShakaConfig);

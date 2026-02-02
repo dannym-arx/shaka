@@ -1,40 +1,20 @@
 {
   "version": "0.1.0",
-  "contextFiles": [
-    "system/base-reasoning-framework.md",
-    "system/steering-rules.md",
-    "user/assistant.md"
-  ],
   "reasoning": {
     "enabled": true
   },
   "providers": {
     "claude": {
-      "enabled": true
+      "enabled": false
     },
     "opencode": {
-      "enabled": true
+      "enabled": false
     }
   },
   "assistant": {
     "name": "Shaka"
   },
   "principal": {
-    "name": "User",
-    "timezone": "America/Los_Angeles"
-  },
-  "techStack": {
-    "runtime": "bun",
-    "packageManager": "bun",
-    "language": "TypeScript"
-  },
-  "hooks": {
-    "_comment": "Add these to ~/.claude/settings.json to enable Shaka hooks",
-    "SessionStart": "bun ${SHAKA_HOME}/system/hooks/session-start.ts",
-    "UserPromptSubmit": "bun ${SHAKA_HOME}/system/hooks/format-reminder.ts"
-  },
-  "agents": {
-    "_comment": "Copy defaults/agents/*.md to ~/.claude/agents/ to enable Shaka agents",
-    "available": ["Analyst"]
+    "name": "Lord"
   }
 }

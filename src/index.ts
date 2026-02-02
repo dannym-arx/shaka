@@ -18,7 +18,6 @@ export {
 export {
   type ShakaConfig,
   type EnvVars,
-  createDefaultConfig,
   validateConfig,
   resolveShakaHome,
 } from "./domain/config";

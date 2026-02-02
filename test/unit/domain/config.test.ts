@@ -1,34 +1,30 @@
 import { describe, expect, test } from "bun:test";
 import {
-  createDefaultConfig,
   validateConfig,
   resolveShakaHome,
   type ShakaConfig,
 } from "../../../src/domain/config";
 
 describe("Config", () => {
-  describe("createDefaultConfig", () => {
-    test("creates config with default values", () => {
-      const config = createDefaultConfig();
-
-      expect(config.reasoning.enabled).toBe(true);
-      // Providers default to false - detection enables them at runtime
-      expect(config.providers.claude.enabled).toBe(false);
-      expect(config.providers.opencode.enabled).toBe(false);
-    });
-  });
-
   describe("validateConfig", () => {
-    test("returns ok for valid config", () => {
-      const config = createDefaultConfig();
-      const result = validateConfig(config);
+    const validConfig: ShakaConfig = {
+      version: "0.1.0",
+      reasoning: { enabled: true },
+      providers: {
+        claude: { enabled: false },
+        opencode: { enabled: false },
+      },
+      assistant: { name: "Shaka" },
+      principal: { name: "User" },
+    };
 
+    test("returns ok for valid config", () => {
+      const result = validateConfig(validConfig);
       expect(result.ok).toBe(true);
     });
 
     test("returns error for null config", () => {
       const result = validateConfig(null);
-
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.message).toBe("Config must be an object");
@@ -37,17 +33,24 @@ describe("Config", () => {
 
     test("returns error for non-object config", () => {
       const result = validateConfig("not an object");
-
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.message).toBe("Config must be an object");
       }
     });
 
-    test("returns error for missing reasoning section", () => {
-      const config = { providers: {} };
-      const result = validateConfig(config);
+    test("returns error for missing version", () => {
+      const { version: _, ...configWithoutVersion } = validConfig;
+      const result = validateConfig(configWithoutVersion);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe("Config must have version string");
+      }
+    });
 
+    test("returns error for missing reasoning section", () => {
+      const { reasoning: _, ...configWithoutReasoning } = validConfig;
+      const result = validateConfig(configWithoutReasoning);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.message).toBe("Config must have reasoning section");
@@ -55,12 +58,29 @@ describe("Config", () => {
     });
 
     test("returns error for missing providers section", () => {
-      const config = { reasoning: { enabled: true } };
-      const result = validateConfig(config);
-
+      const { providers: _, ...configWithoutProviders } = validConfig;
+      const result = validateConfig(configWithoutProviders);
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.message).toBe("Config must have providers section");
+      }
+    });
+
+    test("returns error for missing assistant section", () => {
+      const { assistant: _, ...configWithoutAssistant } = validConfig;
+      const result = validateConfig(configWithoutAssistant);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe("Config must have assistant section");
+      }
+    });
+
+    test("returns error for missing principal section", () => {
+      const { principal: _, ...configWithoutPrincipal } = validConfig;
+      const result = validateConfig(configWithoutPrincipal);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toBe("Config must have principal section");
       }
     });
   });
@@ -68,7 +88,6 @@ describe("Config", () => {
   describe("resolveShakaHome", () => {
     test("uses SHAKA_HOME env var if set", () => {
       const home = resolveShakaHome({ SHAKA_HOME: "/custom/shaka" });
-
       expect(home).toBe("/custom/shaka");
     });
 
@@ -77,13 +96,11 @@ describe("Config", () => {
         XDG_CONFIG_HOME: "/custom/config",
         HOME: "/home/user",
       });
-
       expect(home).toBe("/custom/config/shaka");
     });
 
     test("falls back to ~/.config/shaka", () => {
       const home = resolveShakaHome({ HOME: "/home/user" });
-
       expect(home).toBe("/home/user/.config/shaka");
     });
 
