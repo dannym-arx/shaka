@@ -1,0 +1,58 @@
+# About Me
+
+**Quick reference information your assistant needs frequently.**
+
+Essential facts that help your AI assistant understand you and work effectively.
+
+---
+
+## Quick Facts
+
+- **Name:** [Your name]
+- **Preferred Name:** [Nickname or how you like to be addressed]
+- **Timezone:** [e.g., PST, EST, UTC+1]
+- **Location:** [City, Country]
+- **Primary Language:** [English, Spanish, etc.]
+
+---
+
+## Contact Defaults
+
+- **Primary Email:** [email]
+- **Work Email:** [email if different]
+- **Phone:** [if AI should know for form filling]
+
+---
+
+## Accounts & Handles
+
+| Platform | Username/Handle |
+|----------|-----------------|
+| GitHub | @[username] |
+| Twitter/X | @[handle] |
+| LinkedIn | [URL or name] |
+
+---
+
+## Format Preferences
+
+### Date/Time
+- Date: [YYYY-MM-DD / MM/DD/YYYY / DD/MM/YYYY]
+- Time: [24h / 12h AM/PM]
+
+### Units
+- Currency: [USD / EUR / GBP / etc.]
+- Distance: [miles / kilometers]
+- Temperature: [Fahrenheit / Celsius]
+
+---
+
+## Common Paths
+
+- Projects: `~/Projects/`
+- Downloads: `~/Downloads/`
+- Documents: `~/Documents/`
+
+---
+
+*Keep this brief. Your assistant loads this at session start.*

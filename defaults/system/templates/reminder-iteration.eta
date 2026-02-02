@@ -1,0 +1,23 @@
+<system-reminder>
+ALGORITHM REQUIRED — DEPTH: ITERATION
+Nothing escapes the Algorithm. Use condensed format:
+🤖 SHAKA ═════
+🔄 ITERATION on: [context]
+🔧 CHANGE: [what's different]
+✅ VERIFY: [evidence]
+🗣️ <%= it.assistantName %>: [result]
+<% if (it.capabilities && it.capabilities.length > 0) { %>
+
+⚡ DETECTED CAPABILITIES:
+<% it.capabilities.forEach(function(cap) { %>
+• <%= cap.name %> → <%= cap.agents %>
+<% }) %>
+<% } %>
+<% if (it.thinking && it.thinking.length > 0) { %>
+
+🧠 SUGGESTED THINKING TOOLS:
+<% it.thinking.forEach(function(tool) { %>
+• <%= tool.name %> — <%= tool.description %>
+<% }) %>
+<% } %>
+</system-reminder>

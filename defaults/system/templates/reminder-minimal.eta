@@ -1,0 +1,8 @@
+<system-reminder>
+ALGORITHM REQUIRED — DEPTH: MINIMAL
+Nothing escapes the Algorithm. Use header format:
+🤖 SHAKA ═════
+   Task: [brief description]
+📋 SUMMARY: [what was done]
+🗣️ <%= it.assistantName %>: [voice line]
+</system-reminder>

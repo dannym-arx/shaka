@@ -1,0 +1,13 @@
+{
+  "name": "@shaka/system",
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Shaka system hooks and utilities",
+  "dependencies": {
+    "eta": "^3.5.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "bun-types": "^1.1.0"
+  }
+}
