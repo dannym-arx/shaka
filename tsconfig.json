@@ -14,6 +14,13 @@
     "verbatimModuleSyntax": true,
     "noEmit": true,
 
+    // Path mappings for development
+    // Allows defaults/ to import from "shaka" before package is published
+    "baseUrl": ".",
+    "paths": {
+      "shaka": ["./src/index.ts"]
+    },
+
     // Best practices
     "strict": true,
     "skipLibCheck": true,

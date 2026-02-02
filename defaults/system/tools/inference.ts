@@ -1,6 +1,6 @@
 /**
  * Provider-agnostic inference tool
- * @version 1.0.0
+ * @version 1.1.0
  *
  * Uses CLI tools that handle their own authentication:
  * 1. Claude CLI (claude -p) — if installed
@@ -8,6 +8,8 @@
  *
  * No API keys needed — CLIs manage auth. Install one and inference works.
  */
+
+import { detectInstalledProviders } from "shaka";
 
 export interface InferenceOptions {
   systemPrompt?: string;
@@ -27,29 +29,7 @@ export interface InferenceResult {
 }
 
 // ---------------------------------------------------------------------------
-// CLI Detection (cached)
-// ---------------------------------------------------------------------------
-
-let cliAvailability: { claude: boolean; opencode: boolean } | null = null;
-
-async function detectCLIs(): Promise<{ claude: boolean; opencode: boolean }> {
-  if (cliAvailability) return cliAvailability;
-
-  const [claudeResult, opencodeResult] = await Promise.all([
-    Bun.$`which claude`.quiet().nothrow(),
-    Bun.$`which opencode`.quiet().nothrow(),
-  ]);
-
-  cliAvailability = {
-    claude: claudeResult.exitCode === 0,
-    opencode: opencodeResult.exitCode === 0,
-  };
-
-  return cliAvailability;
-}
-
-// ---------------------------------------------------------------------------
-// CLI-Based Inference (preferred)
+// CLI-Based Inference
 // ---------------------------------------------------------------------------
 
 async function callClaudeCLI(options: InferenceOptions): Promise<InferenceResult> {
@@ -125,14 +105,14 @@ function parseResponse(text: string, expectJson?: boolean, provider?: string): I
  * Both handle their own authentication — no API keys needed.
  */
 export async function inference(options: InferenceOptions): Promise<InferenceResult> {
-  const clis = await detectCLIs();
+  const providers = await detectInstalledProviders();
 
-  if (clis.claude) {
+  if (providers.claude) {
     const result = await callClaudeCLI(options);
     if (result.success) return result;
   }
 
-  if (clis.opencode) {
+  if (providers.opencode) {
     const result = await callOpenCodeCLI(options);
     if (result.success) return result;
   }
@@ -147,6 +127,6 @@ export async function inference(options: InferenceOptions): Promise<InferenceRes
  * Check if any inference CLI is available.
  */
 export async function hasInferenceProvider(): Promise<boolean> {
-  const clis = await detectCLIs();
-  return clis.claude || clis.opencode;
+  const providers = await detectInstalledProviders();
+  return providers.claude || providers.opencode;
 }
