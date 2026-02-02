@@ -10,14 +10,14 @@
  * - Agents: SHAKA_HOME/agents/NAME.md with capability field in frontmatter
  * - Skills: SHAKA_HOME/skills/NAME/SKILL.md (thinking tools have key + include_when)
  * - Templates: SHAKA_HOME/system/templates/NAME.eta
- * - Inference: SHAKA_HOME/system/lib/inference.ts
+ * - Inference: SHAKA_HOME/system/tools/inference.ts
  *
  * TRIGGER: UserPromptSubmit
  */
 
 import { Eta } from "eta";
 import { parse as parseYaml } from "yaml";
-import { inference } from "../lib/inference";
+import { inference } from "../tools/inference";
 
 export const HOOK_VERSION = "0.4.0";
 

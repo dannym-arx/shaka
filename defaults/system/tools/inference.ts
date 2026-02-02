@@ -1,5 +1,5 @@
 /**
- * Provider-agnostic inference library
+ * Provider-agnostic inference tool
  * @version 1.0.0
  *
  * Uses CLI tools that handle their own authentication:

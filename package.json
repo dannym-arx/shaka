@@ -1,12 +1,20 @@
 {
   "name": "shaka",
+  "version": "0.1.0",
   "module": "index.ts",
   "type": "module",
   "private": true,
-  "devDependencies": {
-    "@types/bun": "latest"
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit",
+    "check": "bun run typecheck && bun test"
   },
-  "peerDependencies": {
-    "typescript": "^5"
+  "dependencies": {
+    "eta": "^3.5.0",
+    "yaml": "^2.7.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "typescript": "^5.7.0"
   }
 }
