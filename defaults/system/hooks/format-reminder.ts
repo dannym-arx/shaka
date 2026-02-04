@@ -9,13 +9,12 @@
  * - Agents: SHAKA_HOME/agents/NAME.md with capability field in frontmatter
  * - Skills: SHAKA_HOME/skills/NAME/SKILL.md (thinking tools have key + include_when)
  * - Templates: SHAKA_HOME/system/templates/NAME.eta
- * - Inference: SHAKA_HOME/system/tools/inference.ts
+ * - Inference: imported from shaka package
  */
 
 import { Eta } from "eta";
-import { getAssistantName, isSubagent, resolveShakaHome } from "shaka";
+import { getAssistantName, inference, isSubagent, resolveShakaHome } from "shaka";
 import { parse as parseYaml } from "yaml";
-import { inference } from "../tools/inference";
 
 /** Hook trigger events - Shaka canonical names (provider configurers handle conversion) */
 export const TRIGGER = ["prompt.submit"] as const;

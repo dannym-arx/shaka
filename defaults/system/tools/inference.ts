@@ -1,132 +1,59 @@
 /**
- * Provider-agnostic inference tool
- * @version 1.1.0
+ * Inference Tool for MCP
  *
- * Uses CLI tools that handle their own authentication:
- * 1. Claude CLI (claude -p) — if installed
- * 2. OpenCode CLI (opencode run) — if installed, handles local models too
- *
- * No API keys needed — CLIs manage auth. Install one and inference works.
+ * Exposes the inference library as an MCP tool that Claude Code can call.
+ * This allows Claude Code to invoke other AI models when needed.
  */
 
-import { detectInstalledProviders } from "shaka";
+import { type InferenceOptions, inference } from "shaka";
 
-export interface InferenceOptions {
-  systemPrompt?: string;
-  userPrompt: string;
-  model?: string;
-  maxTokens?: number;
-  timeout?: number;
-  expectJson?: boolean;
-}
+export default {
+  name: "inference",
+  description:
+    "Run AI inference using available CLI tools (claude or opencode). " +
+    "Useful for tasks requiring a separate AI model call.",
 
-export interface InferenceResult {
-  success: boolean;
-  text?: string;
-  parsed?: unknown;
-  error?: string;
-  provider?: string;
-}
+  inputSchema: {
+    type: "object" as const,
+    properties: {
+      prompt: {
+        type: "string" as const,
+        description: "The user prompt to send to the AI model",
+      },
+      systemPrompt: {
+        type: "string" as const,
+        description: "Optional system prompt to set context",
+      },
+      maxTokens: {
+        type: "number" as const,
+        description: "Maximum tokens in response (default: 256)",
+      },
+      expectJson: {
+        type: "boolean" as const,
+        description: "If true, attempts to parse JSON from response",
+      },
+    },
+    required: ["prompt"],
+  },
 
-// ---------------------------------------------------------------------------
-// CLI-Based Inference
-// ---------------------------------------------------------------------------
-
-async function callClaudeCLI(options: InferenceOptions): Promise<InferenceResult> {
-  const prompt = options.systemPrompt
-    ? `${options.systemPrompt}\n\n${options.userPrompt}`
-    : options.userPrompt;
-
-  const maxTokens = options.maxTokens || 256;
-  const result = await Bun.$`claude -p ${prompt} --max-tokens ${maxTokens}`.quiet().nothrow();
-
-  if (result.exitCode !== 0) {
-    return {
-      success: false,
-      error: `Claude CLI error: ${result.stderr.toString()}`,
-      provider: "claude-cli",
+  async execute(args: Record<string, unknown>): Promise<string> {
+    const options: InferenceOptions = {
+      userPrompt: args.prompt as string,
+      systemPrompt: args.systemPrompt as string | undefined,
+      maxTokens: args.maxTokens as number | undefined,
+      expectJson: args.expectJson as boolean | undefined,
     };
-  }
 
-  const text = result.stdout.toString().trim();
-  return parseResponse(text, options.expectJson, "claude-cli");
-}
+    const result = await inference(options);
 
-async function callOpenCodeCLI(options: InferenceOptions): Promise<InferenceResult> {
-  const prompt = options.systemPrompt
-    ? `${options.systemPrompt}\n\n${options.userPrompt}`
-    : options.userPrompt;
-
-  // opencode run expects prompt as argument
-  const result = await Bun.$`opencode run ${prompt}`.quiet().nothrow();
-
-  if (result.exitCode !== 0) {
-    return {
-      success: false,
-      error: `OpenCode CLI error: ${result.stderr.toString()}`,
-      provider: "opencode-cli",
-    };
-  }
-
-  const text = result.stdout.toString().trim();
-  return parseResponse(text, options.expectJson, "opencode-cli");
-}
-
-// ---------------------------------------------------------------------------
-// Response Parsing
-// ---------------------------------------------------------------------------
-
-function parseResponse(text: string, expectJson?: boolean, provider?: string): InferenceResult {
-  if (!expectJson) {
-    return { success: true, text, provider };
-  }
-
-  const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      return { success: true, text, parsed, provider };
-    } catch {
-      return { success: true, text, provider };
+    if (!result.success) {
+      return JSON.stringify({ error: result.error }, null, 2);
     }
-  }
 
-  return { success: true, text, provider };
-}
+    if (result.parsed) {
+      return JSON.stringify(result.parsed, null, 2);
+    }
 
-// ---------------------------------------------------------------------------
-// Main Entry Point
-// ---------------------------------------------------------------------------
-
-/**
- * Run inference using available CLI tools.
- *
- * Tries Claude CLI first, then OpenCode CLI.
- * Both handle their own authentication — no API keys needed.
- */
-export async function inference(options: InferenceOptions): Promise<InferenceResult> {
-  const providers = await detectInstalledProviders();
-
-  if (providers.claude) {
-    const result = await callClaudeCLI(options);
-    if (result.success) return result;
-  }
-
-  if (providers.opencode) {
-    const result = await callOpenCodeCLI(options);
-    if (result.success) return result;
-  }
-
-  return {
-    success: false,
-    error: "No inference provider available. Install claude or opencode CLI.",
-  };
-}
-
-/**
- * Check if any inference CLI is available.
- */
-export async function hasInferenceProvider(): Promise<boolean> {
-  const providers = await detectInstalledProviders();
-  return providers.claude || providers.opencode;
-}
+    return result.text ?? "";
+  },
+};

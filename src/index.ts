@@ -52,9 +52,17 @@ export {
 
 export { type HookEvent, HOOK_EVENTS } from "./providers/hook-discovery";
 
-import { createDoctorCommand } from "./commands/doctor";
+export {
+  type InferenceOptions,
+  type InferenceResult,
+  inference,
+  hasInferenceProvider,
+} from "./inference";
+
 // Import commands
+import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
+import { createMcpCommand } from "./commands/mcp";
 
 // CLI - only run when executed directly, not when imported as library
 if (import.meta.main) {
@@ -64,6 +72,7 @@ if (import.meta.main) {
 
   program.addCommand(createInitCommand());
   program.addCommand(createDoctorCommand());
+  program.addCommand(createMcpCommand());
 
   program.parse(process.argv);
 }
