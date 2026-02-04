@@ -1,8 +1,8 @@
-import { describe, expect, test, mock, beforeEach } from "bun:test";
+import { beforeEach, describe, expect, mock, test } from "bun:test";
 import {
+  type DetectedProviders,
   detectInstalledProviders,
   isProviderInstalled,
-  type DetectedProviders,
 } from "../../../src/services/provider-detection";
 
 describe("provider-detection", () => {

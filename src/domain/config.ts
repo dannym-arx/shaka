@@ -64,21 +64,111 @@ export interface EnvVars {
   HOME?: string;
 }
 
-export function resolveShakaHome(env: EnvVars): string {
+export function resolveShakaHome(env?: EnvVars): string {
+  const e = env ?? process.env;
+
   // 1. Explicit SHAKA_HOME
-  if (env.SHAKA_HOME) {
-    return env.SHAKA_HOME;
+  if (e.SHAKA_HOME) {
+    return e.SHAKA_HOME;
   }
 
   // 2. XDG_CONFIG_HOME/shaka
-  if (env.XDG_CONFIG_HOME) {
-    return `${env.XDG_CONFIG_HOME}/shaka`;
+  if (e.XDG_CONFIG_HOME) {
+    return `${e.XDG_CONFIG_HOME}/shaka`;
   }
 
   // 3. ~/.config/shaka
-  if (env.HOME) {
-    return `${env.HOME}/.config/shaka`;
+  if (e.HOME) {
+    return `${e.HOME}/.config/shaka`;
   }
 
   throw new Error("HOME environment variable not set");
+}
+
+/**
+ * Load and validate config from SHAKA_HOME/config.json.
+ * Returns the config if valid, or null if file doesn't exist or is invalid.
+ */
+export async function loadConfig(shakaHome?: string): Promise<ShakaConfig | null> {
+  const home = shakaHome ?? resolveShakaHome();
+  const configPath = `${home}/config.json`;
+  const file = Bun.file(configPath);
+
+  if (!(await file.exists())) {
+    return null;
+  }
+
+  try {
+    const raw = await file.json();
+    const result = validateConfig(raw);
+    return result.ok ? result.value : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check if running as a subagent (spawned by main agent).
+ * Works with both Claude Code and opencode.
+ */
+export function isSubagent(env: NodeJS.ProcessEnv = process.env): boolean {
+  // Claude Code: task agents set CLAUDE_AGENT_TYPE or run in .claude/Agents/
+  if (env.CLAUDE_AGENT_TYPE !== undefined) return true;
+  if (env.CLAUDE_PROJECT_DIR?.includes("/.claude/Agents/")) return true;
+
+  // opencode: check for subagent indicators
+  if (env.OPENCODE_SUBAGENT === "true") return true;
+  if (env.OPENCODE_AGENT_ID !== undefined) return true;
+
+  return false;
+}
+
+/**
+ * Get assistant name from config, with fallback.
+ */
+export async function getAssistantName(shakaHome?: string): Promise<string> {
+  const config = await loadConfig(shakaHome);
+  return config?.assistant?.name ?? "Shaka";
+}
+
+/**
+ * Get principal (user) name from config, with fallback.
+ */
+export async function getPrincipalName(shakaHome?: string): Promise<string> {
+  const config = await loadConfig(shakaHome);
+  return config?.principal?.name ?? "User";
+}
+
+/**
+ * Load a file from SHAKA_HOME with customization override support.
+ *
+ * For system/ paths: checks customizations/ first, then falls back to system/.
+ * For other paths: loads directly.
+ *
+ * @returns File contents if found, null otherwise
+ */
+export async function loadShakaFile(
+  relativePath: string,
+  shakaHome?: string,
+): Promise<string | null> {
+  const home = shakaHome ?? resolveShakaHome();
+
+  // For system files, check customization override first
+  if (relativePath.startsWith("system/")) {
+    const basename = relativePath.replace("system/", "");
+    const customPath = `${home}/customizations/${basename}`;
+    const customFile = Bun.file(customPath);
+    if (await customFile.exists()) {
+      return customFile.text();
+    }
+  }
+
+  // Load from path as-is
+  const fullPath = `${home}/${relativePath}`;
+  const file = Bun.file(fullPath);
+  if (await file.exists()) {
+    return file.text();
+  }
+
+  return null;
 }

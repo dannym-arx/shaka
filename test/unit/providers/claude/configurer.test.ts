@@ -1,0 +1,304 @@
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { mkdir, rm } from "node:fs/promises";
+import { ClaudeProviderConfigurer } from "../../../../src/providers/claude/configurer";
+import { discoverHooks, parseHookTrigger } from "../../../../src/providers/hook-discovery";
+
+describe("ClaudeProviderConfigurer", () => {
+  const testClaudeHome = "/tmp/shaka-test-claude";
+  const testShakaHome = "/tmp/shaka-test-shaka";
+
+  beforeEach(async () => {
+    await rm(testClaudeHome, { recursive: true, force: true });
+    await rm(testShakaHome, { recursive: true, force: true });
+    await mkdir(testClaudeHome, { recursive: true });
+    await mkdir(`${testShakaHome}/system/hooks`, { recursive: true });
+
+    // Create a test hook with TRIGGER export (Shaka canonical names)
+    await Bun.write(
+      `${testShakaHome}/system/hooks/session-start.ts`,
+      `export const TRIGGER = ["session.start"] as const;
+console.log("test");
+`,
+    );
+  });
+
+  afterEach(async () => {
+    await rm(testClaudeHome, { recursive: true, force: true });
+    await rm(testShakaHome, { recursive: true, force: true });
+  });
+
+  describe("name", () => {
+    test("returns claude", () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+      expect(configurer.name).toBe("claude");
+    });
+  });
+
+  describe("installHooks", () => {
+    test("creates settings.json if it does not exist", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+
+      expect(result.ok).toBe(true);
+      const settingsFile = Bun.file(`${testClaudeHome}/settings.json`);
+      expect(await settingsFile.exists()).toBe(true);
+    });
+
+    test("adds discovered hook entries", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      expect(settings.hooks).toBeDefined();
+      expect(settings.hooks.SessionStart).toBeDefined();
+      expect(settings.hooks.SessionStart.length).toBeGreaterThan(0);
+    });
+
+    test("preserves existing settings", async () => {
+      await Bun.write(
+        `${testClaudeHome}/settings.json`,
+        JSON.stringify({ existingKey: "existingValue" }),
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      expect(settings.existingKey).toBe("existingValue");
+      expect(settings.hooks).toBeDefined();
+    });
+
+    test("does not duplicate hook if already exists", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      const shakaHooks = settings.hooks.SessionStart.filter(
+        (h: { matcher?: string }) => h.matcher === "shaka",
+      );
+      expect(shakaHooks.length).toBe(1);
+    });
+
+    test("installs multiple hooks for different events", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/format-reminder.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;
+console.log("format");
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      expect(settings.hooks.SessionStart).toBeDefined();
+      expect(settings.hooks.UserPromptSubmit).toBeDefined();
+    });
+
+    test("registers all hooks when multiple hooks have same event type", async () => {
+      // Create two hooks with same TRIGGER (Shaka canonical names)
+      await Bun.write(
+        `${testShakaHome}/system/hooks/hook-a.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;
+console.log("hook-a");
+`,
+      );
+      await Bun.write(
+        `${testShakaHome}/system/hooks/hook-b.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;
+console.log("hook-b");
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      const shakaEntry = settings.hooks.UserPromptSubmit.find(
+        (h: { matcher?: string }) => h.matcher === "shaka",
+      );
+      expect(shakaEntry).toBeDefined();
+      expect(shakaEntry.hooks).toHaveLength(2);
+      expect(shakaEntry.hooks.map((h: { command: string }) => h.command)).toContain(
+        `bun ${testShakaHome}/system/hooks/hook-a.ts`,
+      );
+      expect(shakaEntry.hooks.map((h: { command: string }) => h.command)).toContain(
+        `bun ${testShakaHome}/system/hooks/hook-b.ts`,
+      );
+    });
+  });
+
+  describe("uninstallHooks", () => {
+    test("removes shaka hooks from all events", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const result = await configurer.uninstallHooks();
+
+      expect(result.ok).toBe(true);
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      const shakaHooks = (settings.hooks?.SessionStart ?? []).filter(
+        (h: { matcher?: string }) => h.matcher === "shaka",
+      );
+      expect(shakaHooks.length).toBe(0);
+    });
+
+    test("succeeds if settings.json does not exist", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      const result = await configurer.uninstallHooks();
+
+      expect(result.ok).toBe(true);
+    });
+  });
+
+  describe("verifyHooks", () => {
+    test("returns installed: true when hooks are configured", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const result = await configurer.verifyHooks();
+
+      expect(result.installed).toBe(true);
+      expect(result.issues).toHaveLength(0);
+    });
+
+    test("returns installed: false when settings.json missing", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+      await rm(`${testClaudeHome}/settings.json`, { force: true });
+
+      const result = await configurer.verifyHooks();
+
+      expect(result.installed).toBe(false);
+      expect(result.issues).toContain("settings.json not found");
+    });
+
+    test("returns installed: false when no shaka hooks configured", async () => {
+      await Bun.write(`${testClaudeHome}/settings.json`, JSON.stringify({ hooks: {} }));
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      const result = await configurer.verifyHooks();
+
+      expect(result.installed).toBe(false);
+      expect(result.issues).toContain("No Shaka hooks configured");
+    });
+  });
+});
+
+describe("Hook Discovery (shared)", () => {
+  const testShakaHome = "/tmp/shaka-test-discovery";
+
+  beforeEach(async () => {
+    await rm(testShakaHome, { recursive: true, force: true });
+    await mkdir(`${testShakaHome}/system/hooks`, { recursive: true });
+
+    // Use Shaka canonical names
+    await Bun.write(
+      `${testShakaHome}/system/hooks/session-start.ts`,
+      `export const TRIGGER = ["session.start"] as const;
+console.log("test");
+`,
+    );
+  });
+
+  afterEach(async () => {
+    await rm(testShakaHome, { recursive: true, force: true });
+  });
+
+  describe("parseHookTrigger", () => {
+    test("extracts triggers from exported array", async () => {
+      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/session-start.ts`);
+      expect(triggers).toEqual(["session.start"]);
+    });
+
+    test("extracts multiple triggers", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/multi-trigger.ts`,
+        `export const TRIGGER = ["session.start", "prompt.submit"] as const;`,
+      );
+      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/multi-trigger.ts`);
+      expect(triggers).toEqual(["session.start", "prompt.submit"]);
+    });
+
+    test("returns empty array for file without TRIGGER export", async () => {
+      await Bun.write(`${testShakaHome}/system/hooks/no-trigger.ts`, "console.log('no trigger');");
+      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/no-trigger.ts`);
+      expect(triggers).toEqual([]);
+    });
+
+    test("filters out invalid TRIGGER values", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/invalid-trigger.ts`,
+        `export const TRIGGER = ["InvalidEvent", "session.start"] as const;`,
+      );
+      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/invalid-trigger.ts`);
+      expect(triggers).toEqual(["session.start"]);
+    });
+
+    test("returns empty array for non-array TRIGGER", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/string-trigger.ts`,
+        `export const TRIGGER = "session.start" as const;`,
+      );
+      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/string-trigger.ts`);
+      expect(triggers).toEqual([]);
+    });
+
+    test("returns empty array for non-existent file", async () => {
+      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/nonexistent.ts`);
+      expect(triggers).toEqual([]);
+    });
+  });
+
+  describe("discoverHooks", () => {
+    test("discovers hooks with TRIGGER export", async () => {
+      const hooks = await discoverHooks(`${testShakaHome}/system/hooks`);
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0]?.event).toBe("session.start");
+      expect(hooks[0]?.filename).toBe("session-start.ts");
+    });
+
+    test("ignores files without TRIGGER export", async () => {
+      await Bun.write(`${testShakaHome}/system/hooks/no-trigger.ts`, "console.log('no trigger');");
+      const hooks = await discoverHooks(`${testShakaHome}/system/hooks`);
+      expect(hooks).toHaveLength(1);
+    });
+
+    test("discovers multiple hooks", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/format-reminder.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;
+console.log("format");
+`,
+      );
+      const hooks = await discoverHooks(`${testShakaHome}/system/hooks`);
+      expect(hooks).toHaveLength(2);
+      expect(hooks.map((h) => h.event).sort()).toEqual(["prompt.submit", "session.start"]);
+    });
+
+    test("returns empty array for non-existent directory", async () => {
+      const hooks = await discoverHooks("/nonexistent/path");
+      expect(hooks).toEqual([]);
+    });
+
+    test("creates multiple entries for hook with multiple triggers", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/multi-event.ts`,
+        `export const TRIGGER = ["session.start", "prompt.submit"] as const;
+console.log("multi");
+`,
+      );
+      const hooks = await discoverHooks(`${testShakaHome}/system/hooks`);
+      const multiEventHooks = hooks.filter((h) => h.filename === "multi-event.ts");
+      expect(multiEventHooks).toHaveLength(2);
+      expect(multiEventHooks.map((h) => h.event).sort()).toEqual([
+        "prompt.submit",
+        "session.start",
+      ]);
+    });
+  });
+});

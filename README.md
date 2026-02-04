@@ -31,6 +31,8 @@ Inspired by [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure),
 │
 ├── customizations/           # Your OVERRIDES for system/
 │   └── base-reasoning-framework.md  # (example) Your reasoning variant
+│   └── hooks/                      # Your hooks
+│   └── ...
 │
 ├── system/                   # Framework (replaceable on upgrade)
 │   ├── base-reasoning-framework.md  # Default reasoning framework

@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type SessionStartEvent,
   createSessionStartEvent,
   isSessionStartEvent,
-  type SessionStartEvent,
 } from "../../../src/domain/events";
 
 describe("Events", () => {

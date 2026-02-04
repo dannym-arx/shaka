@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import {
+  type Result,
   err,
   flatMap,
   isErr,
@@ -8,7 +9,6 @@ import {
   ok,
   unwrap,
   unwrapOr,
-  type Result,
 } from "../../../src/domain/result";
 
 describe("Result", () => {

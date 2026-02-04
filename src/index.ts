@@ -20,6 +20,11 @@ export {
   type EnvVars,
   validateConfig,
   resolveShakaHome,
+  loadConfig,
+  loadShakaFile,
+  isSubagent,
+  getAssistantName,
+  getPrincipalName,
 } from "./domain/config";
 
 export {
@@ -45,9 +50,20 @@ export {
   isSessionStartEvent,
 } from "./domain/events";
 
-// CLI
-const program = new Command();
+export { type HookEvent, HOOK_EVENTS } from "./providers/hook-discovery";
 
-program.name("shaka").description("Personal AI assistant framework").version("0.1.0");
+import { createDoctorCommand } from "./commands/doctor";
+// Import commands
+import { createInitCommand } from "./commands/init";
 
-program.parse(process.argv);
+// CLI - only run when executed directly, not when imported as library
+if (import.meta.main) {
+  const program = new Command();
+
+  program.name("shaka").description("Personal AI assistant framework").version("0.1.0");
+
+  program.addCommand(createInitCommand());
+  program.addCommand(createDoctorCommand());
+
+  program.parse(process.argv);
+}

@@ -1,7 +1,6 @@
 #!/usr/bin/env bun
 /**
  * FormatReminder hook - Algorithm enforcement via AI inference
- * @version 0.4.0
  *
  * Dynamically discovers capabilities from agent files and thinking tools
  * from skills. No centralized registry needed.
@@ -11,17 +10,18 @@
  * - Skills: SHAKA_HOME/skills/NAME/SKILL.md (thinking tools have key + include_when)
  * - Templates: SHAKA_HOME/system/templates/NAME.eta
  * - Inference: SHAKA_HOME/system/tools/inference.ts
- *
- * TRIGGER: UserPromptSubmit
  */
 
 import { Eta } from "eta";
+import { getAssistantName, isSubagent, resolveShakaHome } from "shaka";
 import { parse as parseYaml } from "yaml";
 import { inference } from "../tools/inference";
 
-export const HOOK_VERSION = "0.4.0";
+/** Hook trigger events - Shaka canonical names (provider configurers handle conversion) */
+export const TRIGGER = ["prompt.submit"] as const;
+export const HOOK_VERSION = "0.5.0";
 
-const SHAKA_HOME = process.env.SHAKA_HOME || `${process.env.HOME}/.config/shaka`;
+const SHAKA_HOME = resolveShakaHome();
 
 // Initialize Eta with templates directory
 const eta = new Eta({
@@ -170,19 +170,6 @@ function capitalize(s: string): string {
 }
 
 /**
- * Get assistant name from config
- */
-async function getAssistantName(): Promise<string> {
-  try {
-    const file = Bun.file(`${SHAKA_HOME}/config.json`);
-    const config = await file.json();
-    return config.assistant?.name || "Shaka";
-  } catch {
-    return "Shaka";
-  }
-}
-
-/**
  * Read stdin with timeout
  */
 async function readStdin(timeout = 3000): Promise<string> {
@@ -301,8 +288,7 @@ Nothing escapes the Algorithm. Use the ${result.depth} format.
 async function main() {
   try {
     // Skip for subagents
-    const claudeProjectDir = process.env.CLAUDE_PROJECT_DIR || "";
-    if (claudeProjectDir.includes("/.claude/Agents/") || process.env.CLAUDE_AGENT_TYPE) {
+    if (isSubagent()) {
       process.exit(0);
     }
 
@@ -318,7 +304,7 @@ async function main() {
       process.exit(0);
     }
 
-    const assistantName = await getAssistantName();
+    const assistantName = await getAssistantName(SHAKA_HOME);
     const result = await classifyPrompt(prompt);
     const reminder = await buildReminder(result, assistantName);
 
