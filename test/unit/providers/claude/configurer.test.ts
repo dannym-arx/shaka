@@ -130,6 +130,98 @@ console.log("hook-b");
         `bun ${testShakaHome}/system/hooks/hook-b.ts`,
       );
     });
+
+    test("registers hooks with matchers under tool-specific entries", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/security.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash", "Edit"] as const;
+console.log("security");
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      const bashEntry = settings.hooks.PreToolUse.find(
+        (h: { matcher?: string }) => h.matcher === "Bash",
+      );
+      const editEntry = settings.hooks.PreToolUse.find(
+        (h: { matcher?: string }) => h.matcher === "Edit",
+      );
+
+      expect(bashEntry).toBeDefined();
+      expect(bashEntry.hooks).toHaveLength(1);
+      expect(bashEntry.hooks[0].command).toBe(`bun ${testShakaHome}/system/hooks/security.ts`);
+
+      expect(editEntry).toBeDefined();
+      expect(editEntry.hooks).toHaveLength(1);
+      expect(editEntry.hooks[0].command).toBe(`bun ${testShakaHome}/system/hooks/security.ts`);
+    });
+
+    test("handles mixed hooks with and without matchers", async () => {
+      // Hook with matchers
+      await Bun.write(
+        `${testShakaHome}/system/hooks/security.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash"] as const;
+console.log("security");
+`,
+      );
+      // Hook without matchers (same event)
+      await Bun.write(
+        `${testShakaHome}/system/hooks/logger.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+console.log("logger");
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+
+      // Bash matcher should have security hook
+      const bashEntry = settings.hooks.PreToolUse.find(
+        (h: { matcher?: string }) => h.matcher === "Bash",
+      );
+      expect(bashEntry).toBeDefined();
+      expect(bashEntry.hooks[0].command).toContain("security.ts");
+
+      // Shaka matcher should have logger hook
+      const shakaEntry = settings.hooks.PreToolUse.find(
+        (h: { matcher?: string }) => h.matcher === "shaka",
+      );
+      expect(shakaEntry).toBeDefined();
+      expect(shakaEntry.hooks[0].command).toContain("logger.ts");
+    });
+
+    test("multiple hooks targeting same matcher are grouped together", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/security-a.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash"] as const;
+`,
+      );
+      await Bun.write(
+        `${testShakaHome}/system/hooks/security-b.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash"] as const;
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      const bashEntry = settings.hooks.PreToolUse.find(
+        (h: { matcher?: string }) => h.matcher === "Bash",
+      );
+
+      expect(bashEntry).toBeDefined();
+      expect(bashEntry.hooks).toHaveLength(2);
+    });
   });
 
   describe("uninstallHooks", () => {
@@ -211,8 +303,9 @@ console.log("test");
 
   describe("parseHookTrigger", () => {
     test("extracts triggers from exported array", async () => {
-      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/session-start.ts`);
-      expect(triggers).toEqual(["session.start"]);
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/session-start.ts`);
+      expect(result.events).toEqual(["session.start"]);
+      expect(result.matchers).toBeUndefined();
     });
 
     test("extracts multiple triggers", async () => {
@@ -220,14 +313,25 @@ console.log("test");
         `${testShakaHome}/system/hooks/multi-trigger.ts`,
         `export const TRIGGER = ["session.start", "prompt.submit"] as const;`,
       );
-      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/multi-trigger.ts`);
-      expect(triggers).toEqual(["session.start", "prompt.submit"]);
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/multi-trigger.ts`);
+      expect(result.events).toEqual(["session.start", "prompt.submit"]);
     });
 
-    test("returns empty array for file without TRIGGER export", async () => {
+    test("extracts matchers when present", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/with-matchers.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash", "Edit"] as const;`,
+      );
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/with-matchers.ts`);
+      expect(result.events).toEqual(["tool.before"]);
+      expect(result.matchers).toEqual(["Bash", "Edit"]);
+    });
+
+    test("returns empty events for file without TRIGGER export", async () => {
       await Bun.write(`${testShakaHome}/system/hooks/no-trigger.ts`, "console.log('no trigger');");
-      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/no-trigger.ts`);
-      expect(triggers).toEqual([]);
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/no-trigger.ts`);
+      expect(result.events).toEqual([]);
     });
 
     test("filters out invalid TRIGGER values", async () => {
@@ -235,22 +339,22 @@ console.log("test");
         `${testShakaHome}/system/hooks/invalid-trigger.ts`,
         `export const TRIGGER = ["InvalidEvent", "session.start"] as const;`,
       );
-      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/invalid-trigger.ts`);
-      expect(triggers).toEqual(["session.start"]);
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/invalid-trigger.ts`);
+      expect(result.events).toEqual(["session.start"]);
     });
 
-    test("returns empty array for non-array TRIGGER", async () => {
+    test("returns empty events for non-array TRIGGER", async () => {
       await Bun.write(
         `${testShakaHome}/system/hooks/string-trigger.ts`,
         `export const TRIGGER = "session.start" as const;`,
       );
-      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/string-trigger.ts`);
-      expect(triggers).toEqual([]);
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/string-trigger.ts`);
+      expect(result.events).toEqual([]);
     });
 
-    test("returns empty array for non-existent file", async () => {
-      const triggers = await parseHookTrigger(`${testShakaHome}/system/hooks/nonexistent.ts`);
-      expect(triggers).toEqual([]);
+    test("returns empty events for non-existent file", async () => {
+      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/nonexistent.ts`);
+      expect(result.events).toEqual([]);
     });
   });
 
@@ -299,6 +403,21 @@ console.log("multi");
         "prompt.submit",
         "session.start",
       ]);
+    });
+
+    test("discovers hooks with matchers", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/security-validator.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash", "Edit", "Write"] as const;
+console.log("security");
+`,
+      );
+      const hooks = await discoverHooks(`${testShakaHome}/system/hooks`);
+      const securityHooks = hooks.filter((h) => h.filename === "security-validator.ts");
+      expect(securityHooks).toHaveLength(1);
+      expect(securityHooks[0]?.event).toBe("tool.before");
+      expect(securityHooks[0]?.matchers).toEqual(["Bash", "Edit", "Write"]);
     });
   });
 });

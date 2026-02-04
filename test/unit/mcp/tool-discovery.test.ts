@@ -166,7 +166,7 @@ describe("tool-discovery", () => {
     });
 
     test("handles invalid tool files gracefully", async () => {
-      await Bun.write(`${testToolsDir}/broken.ts`, `this is not valid javascript`);
+      await Bun.write(`${testToolsDir}/broken.ts`, "this is not valid javascript");
       await Bun.write(
         `${testToolsDir}/valid.ts`,
         `export default {

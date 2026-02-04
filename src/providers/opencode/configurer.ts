@@ -41,10 +41,34 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
       const pluginContent = this.generatePluginContent(config, hooks);
       await Bun.write(pluginPath, pluginContent);
 
+      // Validate generated plugin compiles
+      const validationResult = await this.validatePluginSyntax(pluginPath);
+      if (!validationResult.ok) {
+        await unlink(pluginPath);
+        return validationResult;
+      }
+
       return ok(undefined);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
+  }
+
+  private async validatePluginSyntax(pluginPath: string): Promise<Result<void, Error>> {
+    const result = await Bun.build({
+      entrypoints: [pluginPath],
+      throw: false,
+    });
+
+    if (!result.success) {
+      const errors = result.logs
+        .filter((log) => log.level === "error")
+        .map((log) => log.message)
+        .join("\n");
+      return err(new Error(`Generated plugin has syntax errors:\n${errors}`));
+    }
+
+    return ok(undefined);
   }
 
   async uninstallHooks(): Promise<Result<void, Error>> {
@@ -84,26 +108,49 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
     const userPromptHooks = hooks.filter((h) => h.event === "prompt.submit");
     const preToolHooks = hooks.filter((h) => h.event === "tool.before");
 
+    // Build matcher map for tool hooks: { hookPath: matchers[] | null }
+    const toolHookMatchers = preToolHooks.map((h) => ({
+      path: h.path,
+      matchers: h.matchers ?? null,
+    }));
+
     return `/**
  * Shaka plugin for opencode.
  * Auto-generated - do not edit manually.
  *
  * Discovered hooks:
-${hooks.map((h) => ` *   - ${h.filename} (${h.event})`).join("\n")}
+${hooks.map((h) => ` *   - ${h.filename} (${h.event}${h.matchers ? `, matchers: ${h.matchers.join(", ")}` : ""})`).join("\n")}
  */
 
 const SHAKA_HOME = "${config.shakaHome}";
 
-interface HookOutput {
+interface ClaudeHookInput {
+  session_id: string;
+  tool_name: string;
+  tool_input: Record<string, unknown>;
+}
+
+interface ClaudeHookOutput {
+  continue?: boolean;
+  decision?: "ask";
+  message?: string;
   hookSpecificOutput?: {
     additionalContext?: string;
   };
 }
 
+interface ToolHookConfig {
+  path: string;
+  matchers: string[] | null;
+}
+
+const TOOL_HOOKS: ToolHookConfig[] = ${JSON.stringify(toolHookMatchers, null, 2)};
+
 /**
- * Run a hook script and capture its JSON output.
+ * Run a hook script and capture its output.
+ * Returns { exitCode, output } for proper handling.
  */
-async function runHook(hookPath: string, input: unknown = {}): Promise<HookOutput | null> {
+async function runHookRaw(hookPath: string, input: unknown = {}): Promise<{ exitCode: number; output: ClaudeHookOutput | null }> {
   try {
     const proc = Bun.spawn(["bun", hookPath], {
       stdin: new Blob([JSON.stringify(input)]),
@@ -116,24 +163,30 @@ async function runHook(hookPath: string, input: unknown = {}): Promise<HookOutpu
       proc.exited,
     ]);
 
-    if (exitCode !== 0) {
-      console.error(\`[shaka] Hook \${hookPath} failed with exit code \${exitCode}\`);
-      return null;
-    }
-
     // Find JSON in output (hooks may log to stderr, JSON goes to stdout)
     const jsonMatch = stdout.match(/\\{[\\s\\S]*\\}/);
-    if (!jsonMatch) return null;
+    const output = jsonMatch ? JSON.parse(jsonMatch[0]) as ClaudeHookOutput : null;
 
-    return JSON.parse(jsonMatch[0]) as HookOutput;
+    return { exitCode, output };
   } catch (error) {
     console.error(\`[shaka] Error running hook \${hookPath}:\`, error);
-    return null;
+    return { exitCode: 1, output: null };
   }
+}
+
+/**
+ * Check if a hook should run for a given tool.
+ * Hooks without matchers run for all tools.
+ * Hooks with matchers only run for matching tools.
+ */
+function shouldRunForTool(hook: ToolHookConfig, toolName: string): boolean {
+  if (!hook.matchers) return true;
+  return hook.matchers.includes(toolName);
 }
 
 // Session start context (loaded once at plugin init)
 let sessionContext: string | null = null;
+let sessionId = \`opencode-\${Date.now()}\`;
 
 // Initialize session context
 ${
@@ -144,9 +197,9 @@ ${
   const parts: string[] = [];
 
   for (const hookPath of hooks) {
-    const result = await runHook(hookPath);
-    if (result?.hookSpecificOutput?.additionalContext) {
-      parts.push(result.hookSpecificOutput.additionalContext);
+    const { output } = await runHookRaw(hookPath);
+    if (output?.hookSpecificOutput?.additionalContext) {
+      parts.push(output.hookSpecificOutput.additionalContext);
     }
   }
 
@@ -181,9 +234,9 @@ ${
     // Run UserPromptSubmit hooks
     const hooks = ${JSON.stringify(userPromptHooks.map((h) => h.path))};
     for (const hookPath of hooks) {
-      const result = await runHook(hookPath, input);
-      if (result?.hookSpecificOutput?.additionalContext) {
-        output.system.push(result.hookSpecificOutput.additionalContext);
+      const { output: hookOutput } = await runHookRaw(hookPath, input);
+      if (hookOutput?.hookSpecificOutput?.additionalContext) {
+        output.system.push(hookOutput.hookSpecificOutput.additionalContext);
       }
     }
     `
@@ -197,20 +250,40 @@ ${
 ${
   preToolHooks.length > 0
     ? `
-  // Tool execution hooks
+  // Tool execution hooks with matcher filtering and format normalization
   "tool.execute.before": async (
     input: { tool: string; args: Record<string, unknown> },
     output: { abort?: boolean; error?: string }
   ) => {
-    const hooks = ${JSON.stringify(preToolHooks.map((h) => h.path))};
-    for (const hookPath of hooks) {
-      const result = await runHook(hookPath, input);
-      // PreToolUse hooks can abort execution
-      if (result?.hookSpecificOutput && "abort" in result.hookSpecificOutput) {
+    // Normalize opencode format → Claude Code format
+    const claudeInput: ClaudeHookInput = {
+      session_id: sessionId,
+      tool_name: input.tool,
+      tool_input: input.args,
+    };
+
+    for (const hook of TOOL_HOOKS) {
+      // Filter by matcher
+      if (!shouldRunForTool(hook, input.tool)) continue;
+
+      const { exitCode, output: hookOutput } = await runHookRaw(hook.path, claudeInput);
+
+      // Handle Claude Code output format → opencode format
+      // exit(2) = hard block
+      if (exitCode === 2) {
         output.abort = true;
-        output.error = result.hookSpecificOutput.error || "Hook aborted execution";
-        break;
+        output.error = "[SHAKA SECURITY] Operation blocked by security policy";
+        return;
       }
+
+      // { decision: "ask" } = confirm (log warning, let opencode's permission system handle)
+      if (hookOutput?.decision === "ask") {
+        console.error(\`[SHAKA SECURITY] Warning: \${hookOutput.message || "Operation flagged for review"}\`);
+        // Don't abort - let opencode's native permission system prompt if configured
+      }
+
+      // { continue: true } = allow, keep going
+      // null/error = fail open, keep going
     }
   },
 `

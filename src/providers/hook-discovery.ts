@@ -27,27 +27,45 @@ export interface DiscoveredHook {
   event: HookEvent;
   /** Full path to the hook file */
   path: string;
+  /** Tool matchers for tool.before/tool.after events (e.g., ["Bash", "Edit"]) */
+  matchers?: string[];
+}
+
+interface ParsedHook {
+  events: HookEvent[];
+  matchers?: string[];
 }
 
 /**
- * Parse a hook file to extract its trigger events.
- * Imports the file and reads the exported TRIGGER array.
+ * Parse a hook file to extract its trigger events and optional matchers.
+ * Imports the file and reads the exported TRIGGER and MATCHER arrays.
+ *
+ * TRIGGER: Which events to listen for (e.g., ["tool.before"])
+ * MATCHER: For tool events, which tools to filter (e.g., ["Bash", "Edit", "Write", "Read"])
  */
-export async function parseHookTrigger(filePath: string): Promise<HookEvent[]> {
+export async function parseHookTrigger(filePath: string): Promise<ParsedHook> {
   try {
     // Add cache-busting to ensure fresh import (important for tests and hot-reload)
     const module = await import(`${filePath}?t=${Date.now()}`);
     const trigger = module.TRIGGER;
+    const matcher = module.MATCHER;
 
     if (!Array.isArray(trigger)) {
-      return [];
+      return { events: [] };
     }
 
-    return trigger.filter(
+    const events = trigger.filter(
       (t): t is HookEvent => typeof t === "string" && HOOK_EVENTS.includes(t as HookEvent),
     );
+
+    // Parse matchers if present (for tool.before/tool.after filtering)
+    const matchers = Array.isArray(matcher)
+      ? matcher.filter((m): m is string => typeof m === "string")
+      : undefined;
+
+    return { events, matchers };
   } catch {
-    return [];
+    return { events: [] };
   }
 }
 
@@ -66,13 +84,14 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
       if (!entry.endsWith(".ts")) continue;
 
       const filePath = `${hooksDir}/${entry}`;
-      const events = await parseHookTrigger(filePath);
+      const { events, matchers } = await parseHookTrigger(filePath);
 
       for (const event of events) {
         hooks.push({
           filename: entry,
           event,
           path: filePath,
+          matchers,
         });
       }
     }

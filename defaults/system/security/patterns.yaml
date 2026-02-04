@@ -1,0 +1,86 @@
+# Shaka Security Patterns
+# Used by security-validator.ts hook
+#
+# To customize: copy to customizations/security/patterns.yaml
+# Customization file completely replaces this one (not merged)
+---
+version: "1.0"
+
+# Philosophy: Prevent catastrophic mistakes, confirm dangerous operations
+# Fail-open on errors (usability over paranoia)
+philosophy:
+  mode: safe_functional
+  principle: "Block irreversible damage, confirm risky operations, allow everything else"
+
+# Bash command patterns
+bash:
+  # BLOCKED - Hard block, exit 2 (catastrophic/irreversible)
+  blocked:
+    - pattern: "rm -rf /"
+      reason: "Filesystem destruction"
+    - pattern: "rm -rf ~"
+      reason: "Home directory destruction"
+    - pattern: "sudo rm -rf /"
+      reason: "Filesystem destruction with sudo"
+    - pattern: "dd if=/dev/zero"
+      reason: "Disk overwrite"
+    - pattern: "mkfs\\."
+      reason: "Filesystem format"
+    - pattern: ":(){ :|:& };:"
+      reason: "Fork bomb"
+
+  # CONFIRM - Prompt user for confirmation
+  confirm:
+    - pattern: "git push --force"
+      reason: "Force push can lose commits"
+    - pattern: "git push -f"
+      reason: "Force push can lose commits"
+    - pattern: "git reset --hard"
+      reason: "Loses uncommitted changes"
+    - pattern: "git clean -fd"
+      reason: "Removes untracked files"
+    - pattern: "DROP DATABASE"
+      reason: "Database destruction"
+    - pattern: "DROP TABLE"
+      reason: "Table destruction"
+    - pattern: "TRUNCATE"
+      reason: "Table data destruction"
+    - pattern: "terraform destroy"
+      reason: "Infrastructure destruction"
+
+  # ALERT - Log but allow (suspicious patterns)
+  alert:
+    - pattern: "curl.*\\|.*sh"
+      reason: "Piping curl to shell"
+    - pattern: "curl.*\\|.*bash"
+      reason: "Piping curl to bash"
+    - pattern: "wget.*\\|.*sh"
+      reason: "Piping wget to shell"
+
+# Path protection patterns
+paths:
+  # ZERO ACCESS - Cannot read or write
+  zeroAccess:
+    - "~/.ssh/id_*"
+    - "~/.ssh/*.pem"
+    - "~/.aws/credentials"
+    - "~/.gnupg/private*"
+    - "**/credentials.json"
+    - "**/.env.local"
+
+  # READ ONLY - Can read, cannot write
+  readOnly:
+    - "/etc/**"
+    - "/usr/**"
+
+  # CONFIRM WRITE - Writing requires confirmation
+  confirmWrite:
+    - "**/.env"
+    - "**/.env.*"
+    - "~/.bashrc"
+    - "~/.zshrc"
+
+  # NO DELETE - Cannot delete (can read/write)
+  noDelete:
+    - "**/.git/**"
+    - "**/LICENSE*"

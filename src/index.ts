@@ -59,6 +59,19 @@ export {
   hasInferenceProvider,
 } from "./inference";
 
+export {
+  matchesPattern,
+  expandPath,
+  matchesPathPattern,
+  type Pattern,
+  type PatternsConfig,
+  type ValidationAction,
+  type ValidationResult,
+  validateBashCommand,
+  validatePath,
+  emptyPatternsConfig,
+} from "./security";
+
 // Import commands
 import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
