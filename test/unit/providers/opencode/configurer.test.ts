@@ -162,7 +162,7 @@ export const MATCHER = ["Bash"] as const;
       // Should normalize opencode format to Claude format
       expect(content).toContain("interface ClaudeHookInput");
       expect(content).toContain("tool_name: input.tool");
-      expect(content).toContain("tool_input: input.args");
+      expect(content).toContain("tool_input: output.args");
     });
 
     test("generates exit code handling for blocked operations", async () => {
@@ -178,7 +178,8 @@ export const MATCHER = ["Bash"] as const;
 
       const content = await Bun.file(`${testProjectRoot}/.opencode/plugins/shaka.ts`).text();
       expect(content).toContain("exitCode === 2");
-      expect(content).toContain("output.abort = true");
+      expect(content).toContain("throw new Error");
+      expect(content).toContain("[SHAKA SECURITY] Operation blocked");
     });
 
     test("generates warning handling for confirm decisions", async () => {
@@ -195,6 +196,18 @@ export const MATCHER = ["Bash"] as const;
       const content = await Bun.file(`${testProjectRoot}/.opencode/plugins/shaka.ts`).text();
       expect(content).toContain('decision === "ask"');
       expect(content).toContain("[SHAKA SECURITY] Warning");
+    });
+
+    test("exports a plugin function, not a plain object", async () => {
+      const configurer = new OpencodeProviderConfigurer({ projectRoot: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/.opencode/plugins/shaka.ts`).text();
+      // opencode's plugin loader calls each export as a function.
+      // A plain `export default { ... }` crashes with "fn is not a function".
+      expect(content).toContain("export const ShakaPlugin = async (ctx");
+      expect(content).not.toContain("export default {");
     });
 
     test("validates generated plugin syntax", async () => {

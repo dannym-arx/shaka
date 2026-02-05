@@ -184,65 +184,67 @@ function shouldRunForTool(hook: ToolHookConfig, toolName: string): boolean {
   return hook.matchers.includes(toolName);
 }
 
-// Session start context (loaded once at plugin init)
-let sessionContext: string | null = null;
-let sessionId = \`opencode-\${Date.now()}\`;
+/**
+ * Shaka plugin entry point.
+ * opencode calls this function once at load time;
+ * it must return a Hooks object.
+ */
+export const ShakaPlugin = async (ctx: { directory: string; [key: string]: unknown }) => {
+  // Session start context (loaded once at plugin init)
+  let sessionContext: string | null = null;
+  const sessionId = \`opencode-\${Date.now()}\`;
 
-// Initialize session context
 ${
   sessionStartHooks.length > 0
     ? `
-(async () => {
-  const hooks = ${JSON.stringify(sessionStartHooks.map((h) => h.path))};
-  const parts: string[] = [];
+  // Load session context from SessionStart hooks
+  const sessionHooks = ${JSON.stringify(sessionStartHooks.map((h) => h.path))};
+  const contextParts: string[] = [];
 
-  for (const hookPath of hooks) {
+  for (const hookPath of sessionHooks) {
     const { output } = await runHookRaw(hookPath);
     if (output?.hookSpecificOutput?.additionalContext) {
-      parts.push(output.hookSpecificOutput.additionalContext);
+      contextParts.push(output.hookSpecificOutput.additionalContext);
     }
   }
 
-  sessionContext = parts.join("\\n\\n");
+  sessionContext = contextParts.join("\\n\\n");
   if (sessionContext) {
     console.error("[shaka] Session context loaded");
   }
-})();
 `
-    : "// No SessionStart hooks discovered"
+    : "  // No SessionStart hooks discovered"
 }
 
-export default {
-  name: "shaka",
-
+  return {
 ${
   userPromptHooks.length > 0 || sessionStartHooks.length > 0
     ? `
-  // Context injection
-  "experimental.chat.system.transform": async (
-    input: { system: string },
-    output: { system: string[] }
-  ) => {
-    // Add session context if available
-    if (sessionContext) {
-      output.system.push(sessionContext);
-    }
-
-    ${
-      userPromptHooks.length > 0
-        ? `
-    // Run UserPromptSubmit hooks
-    const hooks = ${JSON.stringify(userPromptHooks.map((h) => h.path))};
-    for (const hookPath of hooks) {
-      const { output: hookOutput } = await runHookRaw(hookPath, input);
-      if (hookOutput?.hookSpecificOutput?.additionalContext) {
-        output.system.push(hookOutput.hookSpecificOutput.additionalContext);
+    // Context injection
+    "experimental.chat.system.transform": async (
+      input: { sessionID?: string; [key: string]: unknown },
+      output: { system: string[] }
+    ) => {
+      // Add session context if available
+      if (sessionContext) {
+        output.system.push(sessionContext);
       }
-    }
-    `
-        : ""
-    }
-  },
+
+      ${
+        userPromptHooks.length > 0
+          ? `
+      // Run UserPromptSubmit hooks
+      const hooks = ${JSON.stringify(userPromptHooks.map((h) => h.path))};
+      for (const hookPath of hooks) {
+        const { output: hookOutput } = await runHookRaw(hookPath, input);
+        if (hookOutput?.hookSpecificOutput?.additionalContext) {
+          output.system.push(hookOutput.hookSpecificOutput.additionalContext);
+        }
+      }
+      `
+          : ""
+      }
+    },
 `
     : ""
 }
@@ -250,45 +252,44 @@ ${
 ${
   preToolHooks.length > 0
     ? `
-  // Tool execution hooks with matcher filtering and format normalization
-  "tool.execute.before": async (
-    input: { tool: string; args: Record<string, unknown> },
-    output: { abort?: boolean; error?: string }
-  ) => {
-    // Normalize opencode format → Claude Code format
-    const claudeInput: ClaudeHookInput = {
-      session_id: sessionId,
-      tool_name: input.tool,
-      tool_input: input.args,
-    };
+    // Tool execution hooks with matcher filtering and format normalization
+    "tool.execute.before": async (
+      input: { tool: string; sessionID: string; callID: string },
+      output: { args: Record<string, unknown> }
+    ) => {
+      // Normalize opencode format → Claude Code format
+      const claudeInput: ClaudeHookInput = {
+        session_id: input.sessionID || sessionId,
+        tool_name: input.tool,
+        tool_input: output.args,
+      };
 
-    for (const hook of TOOL_HOOKS) {
-      // Filter by matcher
-      if (!shouldRunForTool(hook, input.tool)) continue;
+      for (const hook of TOOL_HOOKS) {
+        // Filter by matcher
+        if (!shouldRunForTool(hook, input.tool)) continue;
 
-      const { exitCode, output: hookOutput } = await runHookRaw(hook.path, claudeInput);
+        const { exitCode, output: hookOutput } = await runHookRaw(hook.path, claudeInput);
 
-      // Handle Claude Code output format → opencode format
-      // exit(2) = hard block
-      if (exitCode === 2) {
-        output.abort = true;
-        output.error = "[SHAKA SECURITY] Operation blocked by security policy";
-        return;
+        // Handle Claude Code output format → opencode format
+        // exit(2) = hard block — throw to abort tool execution
+        if (exitCode === 2) {
+          throw new Error("[SHAKA SECURITY] Operation blocked by security policy");
+        }
+
+        // { decision: "ask" } = confirm (log warning, let opencode's permission system handle)
+        if (hookOutput?.decision === "ask") {
+          console.error(\`[SHAKA SECURITY] Warning: \${hookOutput.message || "Operation flagged for review"}\`);
+          // Don't abort - let opencode's native permission system prompt if configured
+        }
+
+        // { continue: true } = allow, keep going
+        // null/error = fail open, keep going
       }
-
-      // { decision: "ask" } = confirm (log warning, let opencode's permission system handle)
-      if (hookOutput?.decision === "ask") {
-        console.error(\`[SHAKA SECURITY] Warning: \${hookOutput.message || "Operation flagged for review"}\`);
-        // Don't abort - let opencode's native permission system prompt if configured
-      }
-
-      // { continue: true } = allow, keep going
-      // null/error = fail open, keep going
-    }
-  },
+    },
 `
     : ""
 }
+  };
 };
 `;
   }
