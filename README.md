@@ -123,7 +123,7 @@ Shaka uses a **progressive abstraction model** where each layer builds on the pr
 ├──────────────┼──────────────────────────────────────────────────────────┤
 │  TOOLS       │ Deterministic TypeScript functions                       │
 │              │ Pure code, no LLM involvement                            │
-│              │ e.g., git-status.ts, file-read.ts                        │
+│              │ e.g., file-read.ts, json-parse.ts                        │
 └──────────────┴──────────────────────────────────────────────────────────┘
 ```
 
@@ -145,15 +145,15 @@ Deterministic TypeScript functions that execute code, not prompts. Tools do the 
 Shaka adopts [opencode's tool format](https://opencode.ai/docs/custom-tools/) for consistency across providers. Tools are TypeScript files using the `tool()` helper:
 
 ```typescript
-// Example: ~/.config/shaka/system/tools/git-status.ts
+// Example: ~/.config/shaka/system/tools/my-tool.ts
 import { tool } from "@opencode-ai/plugin";
 
 export default tool({
-  description: "Get current git repository status",
+  description: "Describe what the tool does",
   args: {},
   async execute(args, context) {
-    const output = await Bun.$`git status --porcelain`.text();
-    return parseGitStatus(output);
+    // Deterministic code — no LLM involvement
+    return "result";
   },
 });
 ```
@@ -173,7 +173,7 @@ name: commit
 description: Create a git commit with AI-generated message
 ---
 
-Use the `git_status` tool to see what changed, then generate a conventional commit message.
+Check what changed in the working tree, then generate a conventional commit message.
 ```
 
 Commands are the primary user interface. Type `/commit` and it runs.
@@ -323,7 +323,7 @@ shaka              # Launch interactive TUI
 ```bash
 shaka run "summarize this file"
 shaka skill list
-shaka tool run git-status
+shaka tool run my-tool
 shaka memory search "project architecture"
 ```
 
@@ -364,7 +364,6 @@ For Phase 0, security relies on the underlying provider's permission system (Cla
 
 - [ ] CLI entry point (`shaka init`, `shaka doctor`)
 - [ ] Directory structure (`~/.config/shaka/{user,system}`)
-- [ ] One tool: `git-status` (proves the pattern)
 - [x] MCP server (`shaka mcp serve`) for Claude Code — **validated via experiments**
 - [x] Event bus with SessionStart hook — **validated via experiments**
 - [x] Claude Code adapter (subprocess shim) — **validated via experiments**

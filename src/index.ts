@@ -53,6 +53,18 @@ export {
 export { type HookEvent, HOOK_EVENTS } from "./providers/hook-discovery";
 
 export {
+  type SemVer,
+  type GitRef,
+  parseSemver,
+  compareSemver,
+  isMajorUpgrade,
+  getCurrentVersion,
+  getGitRef,
+  findLatestTag,
+  findNewerLocalTag,
+} from "./domain/version";
+
+export {
   type InferenceOptions,
   type InferenceResult,
   inference,
@@ -72,18 +84,21 @@ export {
   emptyPatternsConfig,
 } from "./security";
 
-// Import commands
+// Import commands and version
 import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
 import { createMcpCommand } from "./commands/mcp";
+import { createUpdateCommand } from "./commands/update";
+import { getCurrentVersion } from "./domain/version";
 
 // CLI - only run when executed directly, not when imported as library
 if (import.meta.main) {
   const program = new Command();
 
-  program.name("shaka").description("Personal AI assistant framework").version("0.1.0");
+  program.name("shaka").description("Personal AI assistant framework").version(getCurrentVersion());
 
   program.addCommand(createInitCommand());
+  program.addCommand(createUpdateCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createMcpCommand());
 

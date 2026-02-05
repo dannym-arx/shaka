@@ -1,9 +1,13 @@
 /**
  * CLI handler for `shaka init` command.
+ *
+ * Sets up shaka from current state. Idempotent — safe to run anytime.
+ * For safe upgrades with version checking, use `shaka update`.
  */
 
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
+import { findNewerLocalTag, getGitRef } from "../domain/version";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
 import { type InitResult, InitService } from "../services/init-service";
@@ -24,24 +28,24 @@ async function installProviderHooks(
       const provider = createProvider(providerName);
       const hookResult = await provider.installHooks({ shakaHome });
       if (!hookResult.ok) {
-        console.error(`\n✗ Failed to install ${providerName} hooks: ${hookResult.error.message}`);
+        console.error(`  ✗ Failed to install ${providerName} hooks: ${hookResult.error.message}`);
       } else {
-        console.log(`\n✓ Installed ${providerName} hooks`);
+        console.log(`  ✓ Installed ${providerName} hooks`);
       }
     }
   }
 }
 
-function logCreatedItems(directories: string[], files: string[]): void {
-  if (directories.length > 0) {
-    console.log("\nCreated directories:");
-    for (const dir of directories) {
-      console.log(`  ${dir}`);
+function logCreatedItems(result: InitResult): void {
+  if (result.symlinks.length > 0) {
+    console.log("\nLinked:");
+    for (const link of result.symlinks) {
+      console.log(`  ${link}`);
     }
   }
-  if (files.length > 0) {
+  if (result.files.length > 0) {
     console.log("\nCreated files:");
-    for (const file of files) {
+    for (const file of result.files) {
       console.log(`  ${file}`);
     }
   }
@@ -73,12 +77,27 @@ export function createInitCommand(): Command {
         process.exit(1);
       }
 
-      const { providers, directories, files } = result.value;
+      const { providers } = result.value;
 
       logProviderStatus(providers);
       await installProviderHooks(providers, shakaHome);
-      logCreatedItems(directories, files);
+      logCreatedItems(result.value);
 
-      console.log("\n✅ Shaka initialized successfully.");
+      // Show what we're running on: tag or commit
+      const repoRoot = new URL("../..", import.meta.url).pathname;
+      const ref = await getGitRef(repoRoot);
+      const refLabel = ref
+        ? ref.type === "tag"
+          ? ref.label
+          : `v${result.value.currentVersion} (${ref.label})`
+        : `v${result.value.currentVersion}`;
+
+      console.log(`\n✅ Shaka initialized successfully — running on ${refLabel}`);
+
+      // Lightweight local check — no network call
+      const newerTag = await findNewerLocalTag(repoRoot);
+      if (newerTag) {
+        console.log(`   Update available: ${newerTag}. Run \`shaka update\` to upgrade.`);
+      }
     });
 }

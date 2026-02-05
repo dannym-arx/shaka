@@ -5,6 +5,7 @@ Get Shaka running in under 5 minutes.
 ## Prerequisites
 
 - [Bun](https://bun.sh/) runtime (v1.0+)
+- [Git](https://git-scm.com/)
 - At least one AI coding assistant:
   - [Claude Code](https://claude.ai/download) (`claude` CLI)
   - [opencode](https://opencode.ai/) (`opencode` CLI)
@@ -19,34 +20,43 @@ cd shaka
 # Install dependencies
 bun install
 
+# Register shaka globally (makes `shaka` available in PATH)
+bun link
+
 # Initialize Shaka
-bun run src/index.ts init
+shaka init
 
 # Verify installation
-bun run src/index.ts doctor
+shaka doctor
 ```
+
+> **Note:** The repo must stay on disk — `bun link` creates a symlink, so
+> deleting the repo breaks the `shaka` command and hook imports.
 
 ## What `shaka init` Does
 
-1. **Creates directories** at `~/.config/shaka/`:
+1. **Creates user-owned directories** at `~/.config/shaka/`:
 
-   - `user/` — Your personal context files
-   - `system/` — Framework defaults (hooks, tools, reasoning)
-   - `customizations/` — Your overrides (survives upgrades)
+   - `user/` — Your personal context files (never overwritten on upgrade)
+   - `customizations/` — Your overrides for system files (survives upgrades)
    - `memory/` — Session data (created as needed)
 
-2. **Detects providers** (Claude Code, opencode)
+2. **Symlinks `system/`** — Points `~/.config/shaka/system/` to `<repo>/defaults/system/`. This means `git pull` or `shaka update` instantly updates the framework without copying files.
 
-3. **Installs hooks** for detected providers:
-   - Claude Code: Adds entries to `~/.claude/settings.json`
-   - opencode: Creates plugin at `.opencode/plugins/shaka.ts`
+3. **Links the shaka library** — Runs `bun link` so that hooks can `import { ... } from "shaka"` to access shared utilities (config, inference, security, etc.).
+
+4. **Copies user templates** — Deploys starter files from `defaults/user/` to `~/.config/shaka/user/` (per-file, never overwrites existing files). New templates added in future versions are deployed automatically.
+
+5. **Copies default config** — Creates `~/.config/shaka/config.json` if it doesn't exist.
+
+6. **Detects providers** (Claude Code, opencode) and installs hooks for each.
+
+7. **Tracks version** — Writes `.shaka-version` in the shaka home directory.
 
 ## Verifying Installation
 
-Run the doctor command to check everything is working:
-
 ```bash
-bun run src/index.ts doctor
+shaka doctor
 ```
 
 Expected output:
@@ -79,28 +89,37 @@ Edit `~/.config/shaka/config.json` to customize:
 
 ```json
 {
-  "identity": {
-    "principal": { "name": "Your Name" },
-    "assistant": { "name": "Shaka" }
+  "version": "0.1.0",
+  "reasoning": {
+    "enabled": true
   },
-  "contextFiles": [
-    "user/about-me.md",
-    "user/goals.md",
-    "system/base-reasoning-framework.md"
-  ]
+  "providers": {
+    "claude": {
+      "enabled": true
+    },
+    "opencode": {
+      "enabled": true
+    }
+  },
+  "assistant": {
+    "name": "Shaka"
+  },
+  "principal": {
+    "name": "Your Name"
+  }
 }
 ```
 
-### Context Files
+### User Context Files
 
-Files listed in `contextFiles` are loaded at session start. Common patterns:
+Files in `~/.config/shaka/user/` are loaded at session start:
 
-| File                                 | Purpose                      |
-| ------------------------------------ | ---------------------------- |
-| `user/about-me.md`                   | Who you are, your background |
-| `user/goals.md`                      | Current objectives           |
-| `user/tech-stack.md`                 | Your preferred technologies  |
-| `system/base-reasoning-framework.md` | The 7-phase reasoning system |
+| File             | Purpose                                |
+| ---------------- | -------------------------------------- |
+| `about-me.md`   | Who you are, your background           |
+| `goals.md`      | Current objectives                     |
+| `tech-stack.md` | Your preferred technologies            |
+| `assistant.md`  | How you want your assistant to behave  |
 
 ## Customization
 
@@ -119,33 +138,62 @@ Files in `customizations/` take precedence over `system/`.
 
 ## Upgrading
 
-When upgrading Shaka:
+Use the built-in update command:
 
 ```bash
-cd shaka
-git pull
-bun install
-bun run src/index.ts init --force
+shaka update
 ```
 
-The `--force` flag updates `system/` files. Your `user/`, `customizations/`, and `memory/` directories are preserved.
+This will:
+
+1. Fetch the latest release tags from the remote
+2. Compare your current version against the latest `vX.Y.Z` tag
+3. Warn and ask for confirmation on major version upgrades
+4. Check out the new tag, run `bun install`, and re-initialize
+
+Your `user/`, `customizations/`, and `memory/` directories are never touched during upgrades. The `system/` symlink ensures framework updates are instant.
+
+To skip the major-version confirmation prompt:
+
+```bash
+shaka update --force
+```
 
 ## Troubleshooting
 
 ### "Hooks not configured"
 
-Run `shaka init` to install hooks:
+Run init to install hooks:
 
 ```bash
-bun run src/index.ts init
+shaka init
 ```
 
 ### "config.json not found"
 
-Run `shaka init` to create the directory structure:
+Run init to create the directory structure:
 
 ```bash
-bun run src/index.ts init
+shaka init
+```
+
+### "`shaka` command not found"
+
+Re-register the CLI:
+
+```bash
+cd /path/to/shaka
+bun link
+```
+
+### "system/ exists as a real directory"
+
+Init expects `system/` to be a symlink. Move any custom files to `customizations/`, remove the directory, and re-run init:
+
+```bash
+mv ~/.config/shaka/system/my-custom-file.md ~/.config/shaka/customizations/
+rm -rf ~/.config/shaka/system
+shaka init
 ```
 
 ### Provider not detected
@@ -172,6 +220,20 @@ cat ~/.claude/settings.json | grep -A 10 hooks
 ls -la .opencode/plugins/
 ```
 
+### Hook import errors
+
+Hooks import shared code via `import { ... } from "shaka"`. If you see import resolution errors:
+
+```bash
+# Re-link the library
+cd /path/to/shaka
+bun link
+cd ~/.config/shaka
+bun link shaka
+```
+
+Or simply re-run `shaka init`, which handles this automatically.
+
 ## Uninstalling
 
 ```bash
@@ -179,8 +241,9 @@ ls -la .opencode/plugins/
 # Claude Code: Remove shaka entries from ~/.claude/settings.json
 # opencode: Delete .opencode/plugins/shaka.ts
 
-# Remove Shaka configuration (optional - preserves your user/ data)
-rm -rf ~/.config/shaka/system
+# Remove Shaka configuration
+# system/ is a symlink — removing it doesn't delete the repo files
+rm ~/.config/shaka/system
 
 # Remove everything (warning: deletes your customizations and memory)
 rm -rf ~/.config/shaka
@@ -191,3 +254,4 @@ rm -rf ~/.config/shaka
 - Edit `~/.config/shaka/user/about-me.md` to tell Shaka about yourself
 - Run `claude` or `opencode` and see the context injection in action
 - Explore `~/.config/shaka/system/` to understand available hooks and tools
+- Run `shaka update` periodically to get the latest framework updates
