@@ -14,6 +14,18 @@ Inspired by [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure),
 
 ## Architecture
 
+### Design Principles
+
+1. **Bun is the committed runtime** -- No abstraction layer around Bun APIs. Services use `Bun.file()`, `Bun.spawn()`, etc. directly.
+2. **Hooks are standalone scripts** -- Run directly with `bun`, no CLI binary required at runtime.
+3. **Content is declarative** -- Markdown files, JSON config, YAML patterns. Code only where determinism is needed.
+4. **Dependencies at root level** -- `defaults/` is pure content. No `node_modules/` inside it.
+5. **Both providers are first-class** -- Claude Code and opencode supported from day one, not one primary + one afterthought.
+
+For the rationale behind key structural decisions, see [Architecture Decisions](docs/architecture-decisions.md).
+
+### Directory Structure
+
 ```text
 ~/.config/shaka/              # XDG-compliant, provider-agnostic
 ├── user/                     # YOUR content (flat, portable, backed up)
