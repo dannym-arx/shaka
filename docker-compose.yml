@@ -1,0 +1,18 @@
+# Shaka + opencode — isolated test environment
+#
+# Usage:
+#   docker compose run --rm opencode          # run all checks (typecheck + lint + test)
+#   docker compose run --rm opencode bun test # run tests only
+#   docker compose run --rm opencode bun run typecheck
+#   docker compose run --rm opencode bun run src/index.ts init
+#   docker compose run --rm opencode sh       # interactive shell inside container
+#
+# E2E tests:
+#   docker compose run --rm opencode bash test/e2e/opencode-plugin.sh
+
+services:
+  opencode:
+    build:
+      context: .
+      dockerfile: dockerfile-opencode
+    image: shaka-opencode

@@ -1,0 +1,15 @@
+node_modules
+.opencode
+.claude
+experiments
+.git
+.DS_Store
+.vscode
+.cursor
+.idea
+coverage
+dist
+out
+*.tgz
+*.lcov
+misc-docs
