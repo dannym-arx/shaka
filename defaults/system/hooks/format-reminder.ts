@@ -319,4 +319,6 @@ Nothing escapes the Algorithm. Your response MUST use the 7-phase format.
   }
 }
 
-main();
+if (import.meta.main) {
+  main();
+}

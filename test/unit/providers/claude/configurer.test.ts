@@ -78,7 +78,7 @@ console.log("test");
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       const shakaHooks = settings.hooks.SessionStart.filter(
-        (h: { matcher?: string }) => h.matcher === "shaka",
+        (h: { matcher?: string }) => !h.matcher,
       );
       expect(shakaHooks.length).toBe(1);
     });
@@ -119,15 +119,15 @@ console.log("hook-b");
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       const shakaEntry = settings.hooks.UserPromptSubmit.find(
-        (h: { matcher?: string }) => h.matcher === "shaka",
+        (h: { matcher?: string }) => !h.matcher,
       );
       expect(shakaEntry).toBeDefined();
       expect(shakaEntry.hooks).toHaveLength(2);
       expect(shakaEntry.hooks.map((h: { command: string }) => h.command)).toContain(
-        `bun ${testShakaHome}/system/hooks/hook-a.ts`,
+        `bun run ${testShakaHome}/system/hooks/hook-a.ts`,
       );
       expect(shakaEntry.hooks.map((h: { command: string }) => h.command)).toContain(
-        `bun ${testShakaHome}/system/hooks/hook-b.ts`,
+        `bun run ${testShakaHome}/system/hooks/hook-b.ts`,
       );
     });
 
@@ -153,11 +153,11 @@ console.log("security");
 
       expect(bashEntry).toBeDefined();
       expect(bashEntry.hooks).toHaveLength(1);
-      expect(bashEntry.hooks[0].command).toBe(`bun ${testShakaHome}/system/hooks/security.ts`);
+      expect(bashEntry.hooks[0].command).toBe(`bun run ${testShakaHome}/system/hooks/security.ts`);
 
       expect(editEntry).toBeDefined();
       expect(editEntry.hooks).toHaveLength(1);
-      expect(editEntry.hooks[0].command).toBe(`bun ${testShakaHome}/system/hooks/security.ts`);
+      expect(editEntry.hooks[0].command).toBe(`bun run ${testShakaHome}/system/hooks/security.ts`);
     });
 
     test("handles mixed hooks with and without matchers", async () => {
@@ -189,12 +189,12 @@ console.log("logger");
       expect(bashEntry).toBeDefined();
       expect(bashEntry.hooks[0].command).toContain("security.ts");
 
-      // Shaka matcher should have logger hook
-      const shakaEntry = settings.hooks.PreToolUse.find(
-        (h: { matcher?: string }) => h.matcher === "shaka",
+      // No-matcher entry should have logger hook (catch-all)
+      const catchAllEntry = settings.hooks.PreToolUse.find(
+        (h: { matcher?: string }) => !h.matcher,
       );
-      expect(shakaEntry).toBeDefined();
-      expect(shakaEntry.hooks[0].command).toContain("logger.ts");
+      expect(catchAllEntry).toBeDefined();
+      expect(catchAllEntry.hooks[0].command).toContain("logger.ts");
     });
 
     test("multiple hooks targeting same matcher are grouped together", async () => {
@@ -233,10 +233,11 @@ export const MATCHER = ["Bash"] as const;
 
       expect(result.ok).toBe(true);
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
-      const shakaHooks = (settings.hooks?.SessionStart ?? []).filter(
-        (h: { matcher?: string }) => h.matcher === "shaka",
+      const remaining = (settings.hooks?.SessionStart ?? []).filter(
+        (h: { hooks?: Array<{ command?: string }> }) =>
+          h.hooks?.some((hook) => hook.command?.includes("/system/hooks/")),
       );
-      expect(shakaHooks.length).toBe(0);
+      expect(remaining.length).toBe(0);
     });
 
     test("succeeds if settings.json does not exist", async () => {

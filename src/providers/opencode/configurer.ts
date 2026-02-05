@@ -147,10 +147,44 @@ interface ToolHookConfig {
 const TOOL_HOOKS: ToolHookConfig[] = ${JSON.stringify(toolHookMatchers, null, 2)};
 
 /**
+ * Normalize opencode tool names/args to Claude Code format.
+ * opencode uses lowercase tool names and camelCase args;
+ * Claude Code hooks expect PascalCase names and snake_case args.
+ */
+const TOOL_NAME_MAP: Record<string, string> = {
+  read: "Read",
+  write: "Write",
+  edit: "Edit",
+  bash: "Bash",
+};
+
+const ARGS_KEY_MAP: Record<string, Record<string, string>> = {
+  read: { filePath: "file_path" },
+  write: { filePath: "file_path", content: "content" },
+  edit: { filePath: "file_path" },
+  bash: { command: "command" },
+};
+
+function normalizeToolName(opencodeName: string): string {
+  return TOOL_NAME_MAP[opencodeName] || opencodeName;
+}
+
+function normalizeArgs(opencodeTool: string, args: Record<string, unknown>): Record<string, unknown> {
+  const keyMap = ARGS_KEY_MAP[opencodeTool];
+  if (!keyMap) return args;
+
+  const normalized: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(args)) {
+    normalized[keyMap[key] || key] = value;
+  }
+  return normalized;
+}
+
+/**
  * Run a hook script and capture its output.
  * Returns { exitCode, output } for proper handling.
  */
-async function runHookRaw(hookPath: string, input: unknown = {}): Promise<{ exitCode: number; output: ClaudeHookOutput | null }> {
+async function runHookRaw(hookPath: string, input: unknown = {}): Promise<{ exitCode: number; output: ClaudeHookOutput | null; rawOutput: string }> {
   try {
     const proc = Bun.spawn(["bun", hookPath], {
       stdin: new Blob([JSON.stringify(input)]),
@@ -163,14 +197,18 @@ async function runHookRaw(hookPath: string, input: unknown = {}): Promise<{ exit
       proc.exited,
     ]);
 
-    // Find JSON in output (hooks may log to stderr, JSON goes to stdout)
-    const jsonMatch = stdout.match(/\\{[\\s\\S]*\\}/);
-    const output = jsonMatch ? JSON.parse(jsonMatch[0]) as ClaudeHookOutput : null;
+    // Try to parse as JSON; hooks may output plain text instead
+    let output: ClaudeHookOutput | null = null;
+    try {
+      output = JSON.parse(stdout.trim()) as ClaudeHookOutput;
+    } catch {
+      // Not JSON — plain text output, available via rawOutput
+    }
 
-    return { exitCode, output };
+    return { exitCode, output, rawOutput: stdout.trim() };
   } catch (error) {
     console.error(\`[shaka] Error running hook \${hookPath}:\`, error);
-    return { exitCode: 1, output: null };
+    return { exitCode: 1, output: null, rawOutput: "" };
   }
 }
 
@@ -202,9 +240,11 @@ ${
   const contextParts: string[] = [];
 
   for (const hookPath of sessionHooks) {
-    const { output } = await runHookRaw(hookPath);
+    const { output, rawOutput } = await runHookRaw(hookPath);
     if (output?.hookSpecificOutput?.additionalContext) {
       contextParts.push(output.hookSpecificOutput.additionalContext);
+    } else if (rawOutput) {
+      contextParts.push(rawOutput);
     }
   }
 
@@ -236,9 +276,11 @@ ${
       // Run UserPromptSubmit hooks
       const hooks = ${JSON.stringify(userPromptHooks.map((h) => h.path))};
       for (const hookPath of hooks) {
-        const { output: hookOutput } = await runHookRaw(hookPath, input);
+        const { output: hookOutput, rawOutput } = await runHookRaw(hookPath, input);
         if (hookOutput?.hookSpecificOutput?.additionalContext) {
           output.system.push(hookOutput.hookSpecificOutput.additionalContext);
+        } else if (rawOutput) {
+          output.system.push(rawOutput);
         }
       }
       `
@@ -257,16 +299,19 @@ ${
       input: { tool: string; sessionID: string; callID: string },
       output: { args: Record<string, unknown> }
     ) => {
+      const claudeToolName = normalizeToolName(input.tool);
+      const claudeArgs = normalizeArgs(input.tool, output.args);
+
       // Normalize opencode format → Claude Code format
       const claudeInput: ClaudeHookInput = {
         session_id: input.sessionID || sessionId,
-        tool_name: input.tool,
-        tool_input: output.args,
+        tool_name: claudeToolName,
+        tool_input: claudeArgs,
       };
 
       for (const hook of TOOL_HOOKS) {
-        // Filter by matcher
-        if (!shouldRunForTool(hook, input.tool)) continue;
+        // Filter by matcher (using normalized Claude Code tool name)
+        if (!shouldRunForTool(hook, claudeToolName)) continue;
 
         const { exitCode, output: hookOutput } = await runHookRaw(hook.path, claudeInput);
 

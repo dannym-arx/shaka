@@ -1,4 +1,4 @@
-# Shaka + opencode — isolated test environment
+# Shaka — isolated test environments
 #
 # Usage:
 #   docker compose run --rm opencode          # run all checks (typecheck + lint + test)
@@ -6,9 +6,15 @@
 #   docker compose run --rm opencode bun run typecheck
 #   docker compose run --rm opencode bun run src/index.ts init
 #   docker compose run --rm opencode sh       # interactive shell inside container
+#   docker compose run --rm claudecode sh     # interactive shell inside container
 #
 # E2E tests:
-#   docker compose run --rm opencode bash test/e2e/opencode-plugin.sh
+#   docker compose run --rm opencode bash test/e2e/opencode.sh
+#   docker compose run --rm claudecode bash test/e2e/claudecode.sh
+#
+# Claude auth: credentials file is bind-mounted so OAuth persists between runs.
+# First run: mkdir -p .docker-state && touch .docker-state/claude-credentials.json
+# To reset auth: rm .docker-state/claude-credentials.json && touch .docker-state/claude-credentials.json
 
 services:
   opencode:
@@ -16,3 +22,11 @@ services:
       context: .
       dockerfile: dockerfile-opencode
     image: shaka-opencode
+
+  claudecode:
+    build:
+      context: .
+      dockerfile: dockerfile-claudecode
+    image: shaka-claudecode
+    volumes:
+      - ./.docker-state/claude-credentials.json:/home/shakaUser/.claude/.credentials.json

@@ -100,17 +100,13 @@ ${contextContent}
 This context is now active.
 </system-reminder>`;
 
-  const output = {
-    hookSpecificOutput: {
-      additionalContext: systemReminder,
-    },
-  };
-
-  console.log(JSON.stringify(output));
+  console.log(systemReminder);
   console.error("✅ Shaka context loaded");
 }
 
-main().catch((err) => {
-  console.error(`❌ Error: ${err.message}`);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((err) => {
+    console.error(`❌ Error: ${err.message}`);
+    process.exit(1);
+  });
+}

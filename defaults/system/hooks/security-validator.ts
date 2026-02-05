@@ -218,7 +218,9 @@ async function main(): Promise<void> {
   }
 }
 
-main().catch(() => {
-  // Fail open on any error
-  console.log(JSON.stringify({ continue: true }));
-});
+if (import.meta.main) {
+  main().catch(() => {
+    // Fail open on any error
+    console.log(JSON.stringify({ continue: true }));
+  });
+}

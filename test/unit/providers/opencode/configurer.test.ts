@@ -161,8 +161,10 @@ export const MATCHER = ["Bash"] as const;
       const content = await Bun.file(`${testProjectRoot}/.opencode/plugins/shaka.ts`).text();
       // Should normalize opencode format to Claude format
       expect(content).toContain("interface ClaudeHookInput");
-      expect(content).toContain("tool_name: input.tool");
-      expect(content).toContain("tool_input: output.args");
+      expect(content).toContain("normalizeToolName");
+      expect(content).toContain("normalizeArgs");
+      expect(content).toContain("tool_name: claudeToolName");
+      expect(content).toContain("tool_input: claudeArgs");
     });
 
     test("generates exit code handling for blocked operations", async () => {

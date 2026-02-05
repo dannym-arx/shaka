@@ -16,7 +16,7 @@ import {
 import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
 
 interface ClaudeHookEntry {
-  matcher: string;
+  matcher?: string;
   hooks: Array<{
     type: string;
     command: string;
@@ -31,8 +31,16 @@ interface ClaudeSettings {
 }
 
 /**
+ * Check if a hook entry was installed by Shaka.
+ * Identifies Shaka hooks by their command path containing the shaka hooks directory.
+ */
+function isShakaHookEntry(entry: ClaudeHookEntry): boolean {
+  return entry.hooks.some((h) => h.command.includes("/system/hooks/"));
+}
+
+/**
  * Register hooks for a specific matcher, replacing any existing hooks for that matcher.
- * This ensures the settings always reflect the current discovered state.
+ * When matcher is empty, the entry has no matcher field (fires for all events).
  */
 function registerHooksForMatcher(
   eventHooks: ClaudeHookEntry[],
@@ -43,14 +51,16 @@ function registerHooksForMatcher(
 
   const hookCommands = hookPaths.map((path) => ({
     type: "command",
-    command: `bun ${path}`,
+    command: `bun run ${path}`,
   }));
 
-  const existingEntry = eventHooks.find((h) => h.matcher === matcher);
+  const existingEntry = eventHooks.find((h) => (matcher ? h.matcher === matcher : !h.matcher));
   if (existingEntry) {
     existingEntry.hooks = hookCommands;
   } else {
-    eventHooks.push({ matcher, hooks: hookCommands });
+    const entry: ClaudeHookEntry = { hooks: hookCommands };
+    if (matcher) entry.matcher = matcher;
+    eventHooks.push(entry);
   }
 }
 
@@ -76,14 +86,16 @@ function registerHooksWithMatchers(eventHooks: ClaudeHookEntry[], hooks: Discove
 }
 
 /**
- * Register hooks without matchers using "shaka" as generic matcher.
+ * Register hooks without tool-specific matchers.
+ * Uses empty matcher ("") to match all events — Claude Code treats
+ * empty matcher as "match everything" for any event type.
  */
 function registerHooksWithoutMatchers(
   eventHooks: ClaudeHookEntry[],
   hooks: DiscoveredHook[],
 ): void {
   const paths = hooks.map((h) => h.path);
-  registerHooksForMatcher(eventHooks, "shaka", paths);
+  registerHooksForMatcher(eventHooks, "", paths);
 }
 
 /**
@@ -126,6 +138,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
 
       const hooksDir = `${config.shakaHome}/system/hooks`;
       const discoveredHooks = await discoverHooks(hooksDir);
+
       const hooksByEvent = groupHooksByEvent(discoveredHooks);
 
       this.registerAllHooks(settings, hooksByEvent);
@@ -189,7 +202,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
           for (const eventName of Object.keys(settings.hooks)) {
             const eventHooks = settings.hooks[eventName];
             if (Array.isArray(eventHooks)) {
-              settings.hooks[eventName] = eventHooks.filter((h) => h.matcher !== "shaka");
+              settings.hooks[eventName] = eventHooks.filter((h) => !isShakaHookEntry(h));
             }
           }
         }
@@ -226,7 +239,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
     }
 
     const hasShakaHook = Object.values(settings.hooks).some(
-      (eventHooks) => Array.isArray(eventHooks) && eventHooks.some((h) => h.matcher === "shaka"),
+      (eventHooks) => Array.isArray(eventHooks) && eventHooks.some((h) => isShakaHookEntry(h)),
     );
 
     return hasShakaHook ? null : "No Shaka hooks configured";
