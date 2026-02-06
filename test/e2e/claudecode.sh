@@ -132,6 +132,93 @@ else
   echo "$BLOCK_OUTPUT" | tail -5
 fi
 
+# ── Uninstall ─────────────────────────────────────────────────────────
+
+section "Uninstall"
+
+SHAKA_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/shaka"
+
+# Verify things exist before uninstall
+if [ -L "$SHAKA_HOME/system" ]; then
+  pass "system/ symlink exists before uninstall"
+else
+  fail "system/ symlink missing before uninstall"
+  exit 1
+fi
+
+# Inject a non-shaka hook into settings.json to verify it survives uninstall
+TEMP_SETTINGS=$(mktemp)
+bun -e "
+const s = JSON.parse(await Bun.file('$SETTINGS').text());
+if (!s.hooks.PreToolUse) s.hooks.PreToolUse = [];
+s.hooks.PreToolUse.push({
+  matcher: 'Bash',
+  hooks: [{ type: 'command', command: '/usr/bin/echo non-shaka-hook' }]
+});
+await Bun.write('$SETTINGS', JSON.stringify(s, null, 2));
+"
+pass "Injected non-shaka hook into settings.json"
+
+shaka uninstall --keep-data
+
+# Shaka hooks removed from settings.json
+if grep -q "system/hooks" "$SETTINGS" 2>/dev/null; then
+  fail "Shaka hooks still present in settings.json"
+  cat "$SETTINGS"
+  exit 1
+else
+  pass "Shaka hooks removed from settings.json"
+fi
+
+# Non-shaka hook preserved
+if grep -q "non-shaka-hook" "$SETTINGS" 2>/dev/null; then
+  pass "Non-shaka hook preserved in settings.json"
+else
+  fail "Non-shaka hook was removed from settings.json"
+  cat "$SETTINGS"
+  exit 1
+fi
+
+# settings.json itself still exists (we don't delete it)
+if [ -f "$SETTINGS" ]; then
+  pass "settings.json preserved (not deleted)"
+else
+  fail "settings.json was deleted"
+  exit 1
+fi
+
+# system/ symlink removed
+if [ -e "$SHAKA_HOME/system" ]; then
+  fail "system/ still exists after uninstall"
+  exit 1
+else
+  pass "system/ symlink removed"
+fi
+
+# .shaka-version removed
+if [ -f "$SHAKA_HOME/.shaka-version" ]; then
+  fail ".shaka-version still exists after uninstall"
+  exit 1
+else
+  pass ".shaka-version removed"
+fi
+
+# config.json removed
+if [ -f "$SHAKA_HOME/config.json" ]; then
+  fail "config.json still exists after uninstall"
+  exit 1
+else
+  pass "config.json removed"
+fi
+
+# User data preserved (--keep-data)
+if [ -d "$SHAKA_HOME/user" ]; then
+  pass "user/ preserved with --keep-data"
+else
+  fail "user/ was deleted despite --keep-data"
+  exit 1
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────
 
 section "Done"

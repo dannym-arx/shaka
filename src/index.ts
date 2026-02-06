@@ -88,6 +88,7 @@ export {
 import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
 import { createMcpCommand } from "./commands/mcp";
+import { createUninstallCommand } from "./commands/uninstall";
 import { createUpdateCommand } from "./commands/update";
 import { getCurrentVersion } from "./domain/version";
 
@@ -99,6 +100,7 @@ if (import.meta.main) {
 
   program.addCommand(createInitCommand());
   program.addCommand(createUpdateCommand());
+  program.addCommand(createUninstallCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createMcpCommand());
 

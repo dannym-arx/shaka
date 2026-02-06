@@ -93,6 +93,78 @@ else
   echo "$BLOCK_OUTPUT" | tail -5
 fi
 
+# ── Uninstall ─────────────────────────────────────────────────────────
+
+section "Uninstall"
+
+SHAKA_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/shaka"
+
+# Verify things exist before uninstall
+if [ -f "$PLUGIN" ]; then
+  pass "shaka.ts plugin exists before uninstall"
+else
+  fail "shaka.ts plugin missing before uninstall"
+  exit 1
+fi
+
+# Add a non-shaka plugin to verify it survives uninstall
+OTHER_PLUGIN="$(pwd)/.opencode/plugins/other-tool.ts"
+cat > "$OTHER_PLUGIN" << 'PLUGIN_EOF'
+export const OtherPlugin = async () => ({ name: "other-tool" });
+PLUGIN_EOF
+pass "Created non-shaka plugin: other-tool.ts"
+
+shaka uninstall --keep-data
+
+# Shaka plugin removed
+if [ -f "$PLUGIN" ]; then
+  fail "shaka.ts plugin still exists after uninstall"
+  cat "$PLUGIN"
+  exit 1
+else
+  pass "shaka.ts plugin removed"
+fi
+
+# Non-shaka plugin preserved
+if [ -f "$OTHER_PLUGIN" ]; then
+  pass "Non-shaka plugin (other-tool.ts) preserved"
+else
+  fail "Non-shaka plugin was removed by uninstall"
+  exit 1
+fi
+
+# system/ symlink removed
+if [ -e "$SHAKA_HOME/system" ]; then
+  fail "system/ still exists after uninstall"
+  exit 1
+else
+  pass "system/ symlink removed"
+fi
+
+# .shaka-version removed
+if [ -f "$SHAKA_HOME/.shaka-version" ]; then
+  fail ".shaka-version still exists after uninstall"
+  exit 1
+else
+  pass ".shaka-version removed"
+fi
+
+# config.json removed
+if [ -f "$SHAKA_HOME/config.json" ]; then
+  fail "config.json still exists after uninstall"
+  exit 1
+else
+  pass "config.json removed"
+fi
+
+# User data preserved (--keep-data)
+if [ -d "$SHAKA_HOME/user" ]; then
+  pass "user/ preserved with --keep-data"
+else
+  fail "user/ was deleted despite --keep-data"
+  exit 1
+fi
+
 # ── Summary ───────────────────────────────────────────────────────────
 
 section "Done"
