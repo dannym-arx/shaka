@@ -14,7 +14,7 @@ Decisions made during Shaka's development, capturing rationale and trade-offs.
 
 **Rationale:**
 
-| Factor          | Embedded Strings          | External Files      |
+| Factor          | Embedded Strings          | External Files       |
 | --------------- | ------------------------- | -------------------- |
 | Maintainability | Edit TypeScript to change | Edit files directly  |
 | Editor support  | No syntax highlighting    | Full highlighting    |
@@ -33,7 +33,7 @@ Decisions made during Shaka's development, capturing rationale and trade-offs.
 
 **Decision:** Flat four-layer structure:
 
-```
+```text
 src/
 ├── domain/      # Pure types and functions (no I/O)
 ├── services/    # Business logic with Bun I/O

@@ -2,6 +2,58 @@
 
 A personal AI assistant framework. Provider-agnostic. Clear architecture. Your data stays yours.
 
+## Status
+
+**v0.0.1** — Core infrastructure is working. Shaka can set up your environment, inject context into your AI sessions, validate tool usage for security, and work with both Claude Code and opencode.
+
+| Area                       | Status  | Notes                                                            |
+| -------------------------- | ------- | ---------------------------------------------------------------- |
+| Hook system                | Done    | SessionStart, PreToolUse, UserPromptSubmit                       |
+| Provider support           | Done    | Claude Code + opencode, both first-class                         |
+| Init / upgrade / uninstall | Done    | Tag-based releases, safe upgrades                                |
+| Config system              | Done    | JSON config with validation and override support                 |
+| MCP server                 | Done    | Claude Code tool integration via stdio                           |
+| Security validation        | Done    | Bash command + file path validation via hooks                    |
+| Base reasoning framework   | Done    | 7-phase algorithm loaded at session start                        |
+| Customization overrides    | Done    | `customizations/` overrides `system/`                            |
+| Skills (markdown)          | Done    | 5 skills: BeCreative, Council, RedTeam, Science, FirstPrinciples |
+| Agents (markdown)          | Done    | 12 agent definitions                                             |
+| Doctor command             | Done    | Health checks for installation                                   |
+| Tests                      | Done    | 200+ unit tests, Docker-based E2E                                |
+| Tools                      | Minimal | Only `inference.ts`; tool type system not yet built              |
+| Memory                     | Partial | Directory structure + security logging; no search/retrieval      |
+| TUI                        | Planned | No interactive terminal UI yet                                   |
+| Session management         | Planned | No persistent sessions yet                                       |
+| Slash commands             | Planned | No `/commit`, `/diff` style commands yet                         |
+
+## Getting Started
+
+```bash
+git clone <repo-url> shaka
+cd shaka
+bun install
+bun link
+shaka init
+```
+
+`shaka init` will detect your installed providers (Claude Code, opencode, or both) and set everything up.
+
+**Prerequisites:** [Bun](https://bun.sh) and at least one of [Claude Code](https://docs.anthropic.com/en/docs/claude-code) or [opencode](https://opencode.ai).
+
+## What Happens
+
+Shaka doesn't replace your AI coding assistant — it enhances it. Once installed, it works invisibly through hooks:
+
+1. **You start a session** (Claude Code or opencode). The `SessionStart` hook loads your identity, preferences, goals, and reasoning framework into the conversation context. The AI knows who you are and how to think.
+
+2. **You work normally.** Type prompts, ask questions, write code. Shaka is transparent.
+
+3. **The AI tries to run a command.** The `security-validator` hook intercepts it, checks the command against your security patterns, and blocks anything catastrophic before it executes.
+
+4. **You want to customize.** Copy any file from `system/` to `customizations/` and edit it. Your version takes priority. Upgrades never touch your files.
+
+That's it. No new UI to learn, no new commands to memorize. Shaka makes your existing tools smarter.
+
 ## Philosophy
 
 Inspired by [PAI](https://github.com/danielmiessler/Personal_AI_Infrastructure), [Ren](https://github.com/erskingardner/ren), and [openclaw](https://github.com/openclaw/openclaw), but with a focus on:
@@ -39,21 +91,21 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 │   └── ...
 │
 ├── memory/                   # What Shaka LEARNS about you (dynamic)
-│   └── ...                   # Session summaries, patterns, etc.
+│   └── ...                   # Security logs, patterns (search TBD)
 │
 ├── customizations/           # Your OVERRIDES for system/
 │   └── base-reasoning-framework.md  # (example) Your reasoning variant
 │   └── hooks/                      # Your hooks
 │   └── ...
 │
-├── system/                   # Framework (replaceable on upgrade)
-│   ├── base-reasoning-framework.md  # Default reasoning framework
+├── system/ → <repo>/defaults/system  # Symlink to framework (replaced on upgrade)
+│   ├── base-reasoning-framework.md   # Default reasoning framework
 │   ├── hooks/                # Event-driven automation
-│   ├── skills/               # Reusable playbooks
+│   ├── skills/               # Reusable playbooks (markdown)
 │   ├── tools/                # Deterministic operations
-│   └── agents/               # Specialized personas
+│   └── agents/               # Specialized personas (markdown)
 │
-└── config.yaml               # Single configuration file
+└── config.json               # Configuration file
 ```
 
 ### Key Principle: Separation of Concerns
@@ -63,9 +115,9 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 | `user/`           | Who you are (you write it)       | You   | Never touched     | Yes    |
 | `memory/`         | What Shaka learns (Shaka writes) | Shaka | Never touched     | Yes    |
 | `customizations/` | Your overrides for system/       | You   | Never touched     | Yes    |
-| `system/`         | Framework defaults               | Shaka | Replaced entirely | No     |
+| `system/`         | Framework defaults (symlink)     | Shaka | Replaced entirely | No     |
 
-When Shaka upgrades, `system/` can be wiped and reinstalled. Everything else is preserved.
+When Shaka upgrades, `system/` is re-symlinked to the new version. Everything else is preserved.
 
 ### Customization via Override
 
@@ -80,44 +132,48 @@ customizations/tools/foo.ts                 →  overrides  →  system/tools/fo
 
 This lets you tweak the reasoning framework, add hooks, or replace tools without modifying `system/`. Your customizations survive upgrades.
 
+## CLI
+
+### Available Commands
+
+```bash
+shaka init                    # Set up Shaka (creates dirs, symlinks, installs hooks)
+shaka init --claude           # Set up for Claude Code only
+shaka init --opencode         # Set up for opencode only
+shaka init --all              # Set up for both providers
+shaka update                  # Upgrade to latest release (tag-based)
+shaka uninstall               # Remove hooks and config
+shaka doctor                  # Check installation health
+shaka mcp serve               # Start MCP server (for Claude Code tool integration)
+```
+
+### Init Flow
+
+`shaka init` does the following:
+
+1. Detects which providers (Claude Code, opencode) are installed
+2. Prompts for provider selection (or use `--claude`/`--opencode`/`--all`)
+3. Creates `user/`, `memory/`, `customizations/` directories
+4. Symlinks `system/` to the repo's `defaults/system/`
+5. Copies user file templates (identity.md, preferences.md, etc.)
+6. Registers the `shaka` package globally via `bun link`
+7. Installs hooks for selected providers
+8. Tracks version in `.shaka-version`
+
+### Upgrade Flow
+
+`shaka update` uses git tags for releases:
+
+1. Fetches latest tags from remote
+2. Compares current vs latest version
+3. Warns and prompts on major version bumps
+4. Checks out the new tag and re-runs init
+
 ## Base Reasoning Framework
 
-Shaka uses a structured reasoning framework inspired by [PAI's Algorithm](https://github.com/danielmiessler/TheAlgorithm). It's loaded at session start via the SessionStart hook.
+Shaka uses a structured reasoning framework inspired by [PAI's Algorithm](https://github.com/danielmiessler/TheAlgorithm), loaded at session start. The AI works through 7 phases — OBSERVE, THINK, PLAN, BUILD, EXECUTE, VERIFY, LEARN — and defines testable success criteria (ISC) before acting. This prevents the common failure of solving one problem while creating another.
 
-**The 7 Phases:**
-
-```text
-OBSERVE → THINK → PLAN → BUILD → EXECUTE → VERIFY → LEARN
-```
-
-**Key mechanism: Ideal State Criteria (ISC)**
-
-Before acting, define what success looks like as testable criteria:
-
-- Exactly 8 words (forces precision)
-- Binary yes/no (testable in <2 seconds)
-- State-based ("X is true" not "do X")
-
-Plus **anti-criteria** — what must NOT happen.
-
-**Example:**
-
-```text
-Criterion: "All authentication tests pass after fix applied"
-Anti-criterion: "No credentials exposed in git commit history"
-```
-
-The AI verifies all criteria before claiming "done." This prevents the common failure of solving one problem while creating another.
-
-**Configuration:**
-
-```yaml
-# config.yaml
-reasoning:
-  enabled: true # Load base reasoning framework at session start (default: true)
-```
-
-To customize: copy `system/base-reasoning-framework.md` to `customizations/base-reasoning-framework.md` and edit.
+To customize, copy `system/base-reasoning-framework.md` to `customizations/` and edit. For details, see [Reasoning Framework](docs/reasoning-framework.md).
 
 ## Core Concepts
 
@@ -129,30 +185,23 @@ Shaka uses a **progressive abstraction model** where each layer builds on the pr
 │              │ Folder with SKILL.md + commands + context                │
 │              │ e.g., code-review/, deployment/                          │
 ├──────────────┼──────────────────────────────────────────────────────────┤
-│  COMMANDS    │ Single-purpose prompt + tool invocation                  │
+│  COMMANDS    │ Single-purpose prompt + tool invocation        (planned) │
 │              │ Slash-invoked, atomic operations                         │
 │              │ e.g., /commit, /diff, /lint                              │
 ├──────────────┼──────────────────────────────────────────────────────────┤
 │  TOOLS       │ Deterministic TypeScript functions                       │
 │              │ Pure code, no LLM involvement                            │
-│              │ e.g., file-read.ts, json-parse.ts                        │
+│              │ e.g., inference.ts                                        │
 └──────────────┴──────────────────────────────────────────────────────────┘
 ```
-
-**Key distinctions:**
-
-| Aspect     | Tools              | Commands                | Skills                      |
-| ---------- | ------------------ | ----------------------- | --------------------------- |
-| Purpose    | Execute code       | Single task             | Domain workflow             |
-| Invocation | Called by commands | `/slash` by user        | Context or explicit         |
-| Contains   | TypeScript         | Markdown + tool calls   | SKILL.md + commands + files |
-| LLM        | Never              | Yes, for interpretation | Yes, orchestrates           |
-
-A command can exist standalone (`/commit`) or as part of a skill (the `code-review` skill might use `/diff`, `/lint`, and custom analysis).
 
 ### Tools
 
 Deterministic TypeScript functions that execute code, not prompts. Tools do the heavy lifting _before_ the LLM is involved.
+
+Currently, one tool ships with Shaka:
+
+- **`inference.ts`** — Provider-agnostic AI inference (wraps Claude CLI or opencode CLI)
 
 Shaka adopts [opencode's tool format](https://opencode.ai/docs/custom-tools/) for consistency across providers. Tools are TypeScript files using the `tool()` helper:
 
@@ -175,7 +224,7 @@ Tools are exposed to AI providers via:
 - **opencode**: Symlinked to `.opencode/tools/` (native)
 - **Claude Code**: Exposed via `shaka mcp serve` (MCP server)
 
-### Commands
+### Commands (Planned)
 
 Atomic, slash-invoked operations. A command does **one thing**: invoke tools, add a prompt, and let the model respond. Markdown with YAML frontmatter.
 
@@ -188,11 +237,21 @@ description: Create a git commit with AI-generated message
 Check what changed in the working tree, then generate a conventional commit message.
 ```
 
-Commands are the primary user interface. Type `/commit` and it runs.
+Commands will be the primary user interface. Type `/commit` and it runs.
 
 ### Skills
 
-Domain containers for complex workflows. A skill is a **folder** with a `SKILL.md` and optional supporting files. Start flat; add structure only when needed.
+Domain containers for complex workflows. A skill is a **folder** with a `SKILL.md` and optional supporting files. Skills are markdown-based — they provide context and workflow guidance to the AI, not executable code.
+
+**Shipped skills:**
+
+| Skill           | Purpose                                       |
+| --------------- | --------------------------------------------- |
+| BeCreative      | Extended thinking + diverse option generation |
+| Council         | Multi-perspective debate (3-7 agents)         |
+| RedTeam         | Adversarial validation (32 agents)            |
+| Science         | Scientific method workflows                   |
+| FirstPrinciples | Deconstruct → Challenge → Reconstruct         |
 
 ```text
 skills/code-review/
@@ -200,28 +259,13 @@ skills/code-review/
 └── security-rules.md     # Optional supporting context
 ```
 
-```markdown
----
-name: code-review
-description: Review code changes with security and quality checks
-triggers:
-  - user asks for code review
-  - PR is opened (via hook)
----
-
-## Workflow
-
-1. Run `/diff` to see changes
-2. Run `security_scan` tool for vulnerabilities
-3. Check against `security-rules.md`
-4. Synthesize findings into actionable feedback
-```
-
 Skills are invoked by context ("review this PR") or explicitly ("use the code-review skill").
 
 ### Agents
 
-Specialized personas with restricted tool access. Safety through capability limitation.
+Specialized personas defined as markdown prompt templates. Each agent has a defined role, tool access restrictions, and behavioral guidelines.
+
+**12 agents ship with Shaka:** Algorithm, Architect, Artist, ClaudeResearcher, CodexResearcher, Designer, Engineer, GeminiResearcher, GrokResearcher, Intern, Pentester, QATester.
 
 ```markdown
 ---
@@ -238,26 +282,42 @@ You are a code reviewer. You analyze but never modify code.
 
 ### Hooks
 
-Event-driven automation. TypeScript functions that run on specific events.
+Event-driven automation. TypeScript scripts that run on specific events.
+
+**Shipped hooks:**
+
+| Hook                    | Event            | What it does                                                     |
+| ----------------------- | ---------------- | ---------------------------------------------------------------- |
+| `session-start.ts`      | SessionStart     | Loads reasoning framework, user context, session metadata        |
+| `security-validator.ts` | PreToolUse       | Validates bash commands and file paths against security patterns |
+| `format-reminder.ts`    | UserPromptSubmit | Reminds the AI to follow the reasoning framework format          |
+
+**Supported events:**
 
 | Event              | Trigger                 |
 | ------------------ | ----------------------- |
 | `SessionStart`     | New conversation begins |
-| `SessionEnd`       | Conversation ends       |
 | `PreToolUse`       | Before a tool executes  |
 | `PostToolUse`      | After a tool executes   |
 | `UserPromptSubmit` | User sends a message    |
-| `Stop`             | Session is terminated   |
-| `SubagentStop`     | A sub-agent completes   |
+
+**Planned events:**
+
+| Event           | Trigger                | Notes                                   |
+| --------------- | ---------------------- | --------------------------------------- |
+| `SessionEnd`    | Conversation ends      | Memory consolidation, cleanup           |
+| `Stop`          | Session is terminated  | Graceful shutdown, final logging        |
+| `SubagentStart` | A sub-agent is spawned | Claude Code native; opencode needs shim |
+| `SubagentStop`  | A sub-agent completes  | Claude Code native; opencode needs shim |
 
 ### Memory
 
-Persistent context that survives sessions. The exact architecture is intentionally TBD, but the approach combines:
+Persistent context that survives sessions. Currently limited to:
 
-- **Markdown files** — Human-readable, editable, version-controllable
-- **Vector search** — Semantic retrieval for relevant context (likely sqlite-vec)
+- **Directory structure** at `~/.config/shaka/memory/`
+- **Security event logging** — the security validator writes logs to `memory/security/`
 
-Inspiration: [PAI Memory System discussion](https://github.com/danielmiessler/Personal_AI_Infrastructure/discussions/527) proposes tiered memory with importance/stability scoring and intelligent decay. We'll iterate on what works.
+**Planned:** Semantic retrieval via vector search (likely sqlite-vec), tiered memory with importance scoring. See [PAI Memory System discussion](https://github.com/danielmiessler/Personal_AI_Infrastructure/discussions/527).
 
 ## Provider Support
 
@@ -268,165 +328,61 @@ Shaka integrates with two AI coding assistants:
 | Claude Code | MCP server (`shaka mcp serve`) | Subprocess in `~/.claude/` | AGENTS.md  |
 | opencode    | Native (`.opencode/tools/`)    | In-process plugin          | .opencode/ |
 
-### Tool Integration
+You write hooks once — provider-specific adapters handle the translation. For details on hook abstraction, event mapping, and tool integration, see [Providers](docs/providers.md).
 
-Tools use [opencode's format](https://opencode.ai/docs/custom-tools/) as the canonical definition. For Claude Code, Shaka runs an MCP server that exposes the same tools:
+## Security
 
-```bash
-# For Claude Code: run the MCP server
-claude mcp add shaka --transport stdio -- shaka mcp serve
+The security validator hook (`security-validator.ts`) runs on every tool use, checking:
 
-# For opencode: tools are symlinked automatically
-# ~/.config/shaka/system/tools/ → .opencode/tools/
-```
+- **Bash commands** against patterns defined in `system/security/patterns.yaml`
+- **File paths** for read/write operations (blocks access to sensitive directories)
+- **Catastrophic operations** are blocked outright (e.g., `rm -rf /`)
+- **Dangerous operations** trigger confirmation prompts
 
-### Hook Abstraction
-
-Claude Code and opencode have different hook mechanisms:
-
-- **Claude Code**: Subprocess hooks (spawns a new process per event)
-- **opencode**: In-process plugins (runs within the same process)
-
-Shaka abstracts this with a common event bus:
-
-```text
-┌─────────────────────────────────────────────────────────┐
-│                    Shaka Event Bus                       │
-│         ~/.config/shaka/system/hooks/                    │
-│  (SessionStart, PreToolUse, etc. — one implementation)  │
-└────────────────────────┬────────────────────────────────┘
-                         │
-         ┌───────────────┴───────────────┐
-         ▼                               ▼
-┌─────────────────────┐      ┌─────────────────────┐
-│  Claude Code Adapter │      │  opencode Adapter   │
-│  ~/.claude/hooks/    │      │  .opencode/plugin   │
-│  (subprocess shim)   │      │  (in-process shim)  │
-└─────────────────────┘      └─────────────────────┘
-```
-
-**How it works:**
-
-1. You write hook handlers once in `~/.config/shaka/system/hooks/`
-2. Thin adapters (~10 lines each) translate provider events to Shaka events
-3. Same behavior regardless of which AI assistant you use
-
-### Feature Polyfills
-
-Some features exist in one provider but not the other. Shaka polyfills these gaps:
-
-| Feature              | Claude Code                 | opencode | Shaka Polyfill           |
-| -------------------- | --------------------------- | -------- | ------------------------ |
-| Subagent events      | Native `SubagentStart/Stop` | ❌       | Detect via Task tool     |
-| Background subagents | `run_in_background=true`    | ❌       | Spawn `opencode run` CLI |
-
-**Background subagent polyfill:** opencode's Task tool lacks background support, so Shaka provides tools that spawn `opencode run` as a subprocess. Inspired by [opencode-background](https://github.com/zenobi-us/opencode-background). See `plans/hooks.md` for implementation details.
-
-## Interfaces
-
-### TUI (Primary)
-
-```bash
-shaka              # Launch interactive TUI
-```
-
-### CLI (Single-shot)
-
-```bash
-shaka run "summarize this file"
-shaka skill list
-shaka tool run my-tool
-shaka memory search "project architecture"
-```
-
-### Session Management
-
-Shaka sessions persist across CLI invocations, enabling gateway patterns and background workers:
-
-```bash
-shaka start --title "Auth feature"    # Start new session
-shaka resume                          # Resume last session
-shaka run --session <id> "message"    # Send to specific session (non-interactive)
-shaka sessions                        # List sessions
-```
-
-Both providers support session attachment via `--continue`/`--resume` (Claude Code) and `--session` (opencode). See `plans/session-management.md` for architecture details.
-
-## Security Model
-
-Security through explicit capability grants, not permission prompts. The detailed permission model is TBD, but the principle is: define what's allowed upfront rather than prompting at runtime.
+Security events are logged to `memory/security/`.
 
 ```yaml
-# config.yaml (Phase 1+)
-security:
-  directories:
-    allow:
-      - ~/Projects
-      - ~/.config/shaka
-    deny:
-      - ~/.ssh
-      - ~/.aws
+# system/security/patterns.yaml
+catastrophic:
+  - pattern: "rm -rf /"
+    description: "Recursive delete from root"
+dangerous:
+  - pattern: "git push --force"
+    description: "Force push (rewrites history)"
 ```
 
-For Phase 0, security relies on the underlying provider's permission system (Claude Code's tool permissions, opencode's sandbox).
+**Planned:** Config-driven allow/deny directory lists, per-agent capability grants.
 
-## Roadmap
+## Planned Features
 
-### Phase 0: Foundation
+These are ideas for future development, not yet implemented:
 
-- [ ] CLI entry point (`shaka init`, `shaka doctor`)
-- [ ] Directory structure (`~/.config/shaka/{user,system}`)
-- [x] MCP server (`shaka mcp serve`) for Claude Code — **validated via experiments**
-- [x] Event bus with SessionStart hook — **validated via experiments**
-- [x] Claude Code adapter (subprocess shim) — **validated via experiments**
-- [x] Session attachment (non-interactive CLI) — **validated via experiments**
-
-**Experiments completed:**
-
-| Experiment              | Result | Key Finding                                                 |
-| ----------------------- | ------ | ----------------------------------------------------------- |
-| `01-claude-hooks`       | ✅     | Claude Code hooks work via subprocess + JSON stdin          |
-| `02-opencode-plugin`    | ✅     | opencode plugins work via in-process TypeScript             |
-| `03-context-injection`  | ✅     | Both providers support context injection (different APIs)   |
-| `04-error-blocking`     | ✅     | Both providers support blocking tools (exit 2 / throw)      |
-| `05-subagent-events`    | ✅     | CC: native SubagentStart/Stop; OC: polyfill via Task tool   |
-| `06-session-attachment` | ✅     | Both support session resume + non-interactive attachment    |
-| `07-mcp-server`         | ✅     | MCP works + unified tool format (opencode → both providers) |
-
-See `experiments/` and `plans/hooks.md` for details. Session management design in `plans/session-management.md`.
-
-### Phase 1: Skills & Commands
-
-- [ ] Command system with YAML frontmatter
-- [ ] Skill system (SKILL.md + context files)
-- [x] opencode hook adapter — **validated via experiments**
-
-### Phase 2: Agents & Memory
-
-- [ ] Agent definitions with tool restrictions
-- [ ] Session summaries (markdown)
-- [ ] Vector search (sqlite-vec)
-
-### Phase 3: Polish
-
-- [ ] TUI with rich interface
-- [ ] Preference learning
-- [ ] Community skill repository
+- **Interactive TUI** — `shaka` as a standalone terminal interface
+- **Session management** — Persistent sessions across CLI invocations (`shaka start`, `shaka resume`, `shaka sessions`)
+- **Slash commands** — `/commit`, `/diff`, `/lint` style atomic operations
+- **Single-shot CLI** — `shaka run "summarize this file"`, `shaka skill list`, `shaka tool run`
+- **Memory search** — Semantic retrieval via vector search
+- **Feature polyfills** — Subagent events and background subagents for opencode
 
 ## Development
 
+Requires [Bun](https://bun.sh) and [just](https://github.com/casey/just).
+
 ```bash
-# Install dependencies
-bun install
+bun install          # Install dependencies
+just check           # Run all checks (typecheck + lint + tests)
+just test            # Run tests
+just typecheck       # Run typechecker
+just lint            # Run linter
+just format          # Format code
+```
 
-# Run in development
-bun run dev
+### E2E Tests (Docker)
 
-# Run tests
-bun test
-
-# Build
-bun run build
+```bash
+just e2e             # Run all e2e tests
+just e2e-claude      # Claude Code e2e only
+just e2e-opencode    # opencode e2e only
 ```
 
 ## Prior Art
