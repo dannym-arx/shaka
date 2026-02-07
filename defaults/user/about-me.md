@@ -26,21 +26,23 @@ Essential facts that help your AI assistant understand you and work effectively.
 
 ## Accounts & Handles
 
-| Platform | Username/Handle |
-|----------|-----------------|
-| GitHub | @[username] |
-| Twitter/X | @[handle] |
-| LinkedIn | [URL or name] |
+| Platform  | Username/Handle |
+| --------- | --------------- |
+| GitHub    | @[username]     |
+| Twitter/X | @[handle]       |
+| LinkedIn  | [URL or name]   |
 
 ---
 
 ## Format Preferences
 
 ### Date/Time
+
 - Date: [YYYY-MM-DD / MM/DD/YYYY / DD/MM/YYYY]
 - Time: [24h / 12h AM/PM]
 
 ### Units
+
 - Currency: [USD / EUR / GBP / etc.]
 - Distance: [miles / kilometers]
 - Temperature: [Fahrenheit / Celsius]
@@ -55,4 +57,4 @@ Essential facts that help your AI assistant understand you and work effectively.
 
 ---
 
-*Keep this brief. Your assistant loads this at session start.*
+_Keep this brief. Your assistant loads this at session start._

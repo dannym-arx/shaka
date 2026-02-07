@@ -108,6 +108,8 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 └── config.json               # Configuration file
 ```
 
+> **User file loading:** All `.md` files directly under `user/` are automatically loaded into the AI's context at session start by the [`session-start`](#hooks) hook. Files in subdirectories (e.g., `user/projects/details.md`) are **not** auto-loaded — they must be explicitly referenced so the model can load them on demand.
+
 ### Key Principle: Separation of Concerns
 
 | Directory         | Purpose                          | Owner | Upgrades          | Backup |
