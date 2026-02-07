@@ -12,7 +12,7 @@ import { findNewerLocalTag, getGitRef } from "../domain/version";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
-import { type InitResult, InitService } from "../services/init-service";
+import { type InitResult, InitService, type Personalization } from "../services/init-service";
 import { type DetectedProviders, detectInstalledProviders } from "../services/provider-detection";
 
 const PROVIDER_LABELS: Record<ProviderName, string> = {
@@ -124,6 +124,20 @@ async function promptProviderSelection(detected: DetectedProviders): Promise<Pro
   }
 }
 
+/**
+ * Prompt user for their name and assistant name.
+ * Shows defaults — pressing Enter accepts them.
+ */
+async function promptPersonalization(): Promise<Personalization> {
+  const principalName = await prompt("Your name [Chief]: ");
+  const assistantName = await prompt("Assistant name [Shaka]: ");
+
+  return {
+    principalName: principalName || "Chief",
+    assistantName: assistantName || "Shaka",
+  };
+}
+
 function logProviderStatus(providers: InitResult["providers"]): void {
   console.log("Detecting providers...");
   console.log(`  Claude Code: ${providers.claude.detected ? "✓ detected" : "✗ not found"}`);
@@ -198,6 +212,7 @@ export function createInitCommand(): Command {
     .option("--opencode", "Install hooks for opencode")
     .option("--all", "Install hooks for all detected providers")
     .option("--force", "Overwrite existing configuration")
+    .option("--defaults", "Skip name prompts and use defaults")
     .action(async (options) => {
       const shakaHome = resolveShakaHome({
         SHAKA_HOME: process.env.SHAKA_HOME,
@@ -211,12 +226,20 @@ export function createInitCommand(): Command {
       const flagProviders = resolveProvidersFromFlags(options, detected);
       const selectedProviders = flagProviders ?? (await promptProviderSelection(detected));
 
+      // Prompt for names unless --defaults is passed
+      let personalization: Personalization | undefined;
+      if (!options.defaults) {
+        console.log();
+        personalization = await promptPersonalization();
+      }
+
       console.log();
 
       const initService = new InitService({ shakaHome });
       const result = await initService.init({
         providers: selectedProviders,
         force: options.force,
+        personalization,
       });
 
       if (!result.ok) {

@@ -7,6 +7,7 @@
  */
 
 import { lstat, mkdir, readdir, readlink, rm, symlink } from "node:fs/promises";
+import { Eta } from "eta";
 import { type Result, err, ok } from "../domain/result";
 import { getCurrentVersion } from "../domain/version";
 import {
@@ -16,7 +17,8 @@ import {
 } from "./provider-detection";
 
 // Resolve defaults directory relative to this module
-const DEFAULT_DEFAULTS_PATH = new URL("../../defaults", import.meta.url).pathname;
+const DEFAULT_DEFAULTS_PATH = new URL("../../defaults", import.meta.url)
+  .pathname;
 const DEFAULT_REPO_ROOT = new URL("../..", import.meta.url).pathname;
 
 export interface InitServiceConfig {
@@ -31,10 +33,17 @@ export interface InitServiceConfig {
   runBunLink?: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
 }
 
+export interface Personalization {
+  principalName: string;
+  assistantName: string;
+}
+
 export interface InitOptions {
   /** Specific providers to install. If empty/undefined, installs all detected. */
   providers?: ProviderName[];
   force?: boolean;
+  /** User and assistant names for template rendering and config. */
+  personalization?: Personalization;
 }
 
 export interface InitResult {
@@ -49,7 +58,10 @@ export interface InitResult {
 }
 
 /** Default bun link runner using Bun.spawn. */
-async function defaultRunBunLink(cwd: string, args: string[]): Promise<Result<void, Error>> {
+async function defaultRunBunLink(
+  cwd: string,
+  args: string[]
+): Promise<Result<void, Error>> {
   try {
     const proc = Bun.spawn(["bun", "link", ...args], {
       cwd,
@@ -60,12 +72,20 @@ async function defaultRunBunLink(cwd: string, args: string[]): Promise<Result<vo
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text();
       return err(
-        new Error(`bun link ${args.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`),
+        new Error(
+          `bun link ${args.join(
+            " "
+          )} failed (exit ${exitCode}): ${stderr.trim()}`
+        )
       );
     }
     return ok(undefined);
   } catch (e) {
-    return err(new Error(`bun link failed: ${e instanceof Error ? e.message : String(e)}`));
+    return err(
+      new Error(
+        `bun link failed: ${e instanceof Error ? e.message : String(e)}`
+      )
+    );
   }
 }
 
@@ -74,7 +94,10 @@ export class InitService {
   private readonly defaultsPath: string;
   private readonly repoRoot: string;
   private readonly detectProviders: () => Promise<DetectedProviders>;
-  private readonly runBunLink: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
+  private readonly runBunLink: (
+    cwd: string,
+    args: string[]
+  ) => Promise<Result<void, Error>>;
 
   constructor(config: InitServiceConfig) {
     this.shakaHome = config.shakaHome;
@@ -102,8 +125,10 @@ export class InitService {
       } catch (e) {
         return err(
           new Error(
-            `Failed to create directory '${dir}': ${e instanceof Error ? e.message : String(e)}`,
-          ),
+            `Failed to create directory '${dir}': ${
+              e instanceof Error ? e.message : String(e)
+            }`
+          )
         );
       }
     }
@@ -140,8 +165,8 @@ export class InitService {
       if (exists && !isLink) {
         return err(
           new Error(
-            `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`,
-          ),
+            `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`
+          )
         );
       }
 
@@ -161,7 +186,11 @@ export class InitService {
       return ok(symlinks);
     } catch (e) {
       return err(
-        new Error(`Failed to link system/: ${e instanceof Error ? e.message : String(e)}`),
+        new Error(
+          `Failed to link system/: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        )
       );
     }
   }
@@ -169,50 +198,87 @@ export class InitService {
   /**
    * Copy user templates from defaults/user/ to shakaHome/user/.
    * Copies each file individually. Never overwrites existing files.
+   * Files ending in .eta are rendered with Eta before writing (extension stripped).
    * This means new templates added in future versions get deployed
    * to existing installations.
    */
-  async copyUserTemplates(): Promise<Result<string[], Error>> {
-    const files: string[] = [];
+  async copyUserTemplates(
+    personalization?: Personalization
+  ): Promise<Result<string[], Error>> {
     const sourceDir = `${this.defaultsPath}/user`;
     const targetDir = `${this.shakaHome}/user`;
 
+    let entries: string[];
     try {
-      let entries: string[];
-      try {
-        entries = await readdir(sourceDir);
-      } catch {
-        // No user templates in defaults — that's fine
-        return ok(files);
-      }
+      entries = await readdir(sourceDir);
+    } catch {
+      return ok([]);
+    }
 
-      for (const entry of entries) {
-        const targetPath = `${targetDir}/${entry}`;
-        if (await Bun.file(targetPath).exists()) {
-          continue; // Don't overwrite existing user files
-        }
+    const eta = new Eta({ autoEscape: false });
+    const templateData = {
+      principalName: personalization?.principalName ?? "Chief",
+      assistantName: personalization?.assistantName ?? "Shaka",
+    };
 
-        const sourceFile = Bun.file(`${sourceDir}/${entry}`);
-        if (await sourceFile.exists()) {
-          const content = await sourceFile.text();
-          await Bun.write(targetPath, content);
-          files.push(targetPath);
-        }
-      }
-
+    try {
+      const files = await this.renderAndCopyTemplates(
+        entries,
+        sourceDir,
+        targetDir,
+        eta,
+        templateData
+      );
       return ok(files);
     } catch (e) {
       return err(
-        new Error(`Failed to copy user templates: ${e instanceof Error ? e.message : String(e)}`),
+        new Error(
+          `Failed to copy user templates: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        )
       );
     }
   }
 
+  private async renderAndCopyTemplates(
+    entries: string[],
+    sourceDir: string,
+    targetDir: string,
+    eta: Eta,
+    templateData: Record<string, string>
+  ): Promise<string[]> {
+    const files: string[] = [];
+
+    for (const entry of entries) {
+      const isTemplate = entry.endsWith(".eta");
+      const outputName = isTemplate ? entry.slice(0, -4) : entry;
+      const targetPath = `${targetDir}/${outputName}`;
+
+      if (await Bun.file(targetPath).exists()) {
+        continue;
+      }
+
+      const sourceFile = Bun.file(`${sourceDir}/${entry}`);
+      if (await sourceFile.exists()) {
+        const raw = await sourceFile.text();
+        const content = isTemplate ? eta.renderString(raw, templateData) : raw;
+        await Bun.write(targetPath, content);
+        files.push(targetPath);
+      }
+    }
+
+    return files;
+  }
+
   /**
    * Copy default config.json if it doesn't exist.
+   * When personalization is provided, merges names into the default config.
    * Never overwrites existing config.
    */
-  async copyDefaultConfig(): Promise<Result<string[], Error>> {
+  async copyDefaultConfig(
+    personalization?: Personalization
+  ): Promise<Result<string[], Error>> {
     const files: string[] = [];
     const configPath = `${this.shakaHome}/config.json`;
 
@@ -221,11 +287,21 @@ export class InitService {
       const defaultConfig = Bun.file(defaultConfigPath);
 
       if (!(await defaultConfig.exists())) {
-        return err(new Error(`Default config not found at ${defaultConfigPath}`));
+        return err(
+          new Error(`Default config not found at ${defaultConfigPath}`)
+        );
       }
 
-      const content = await defaultConfig.text();
-      await Bun.write(configPath, content);
+      if (personalization) {
+        const config = await defaultConfig.json();
+        config.principal.name = personalization.principalName;
+        config.assistant.name = personalization.assistantName;
+        await Bun.write(configPath, `${JSON.stringify(config, null, 2)}\n`);
+      } else {
+        const content = await defaultConfig.text();
+        await Bun.write(configPath, content);
+      }
+
       files.push(configPath);
     }
 
@@ -277,7 +353,11 @@ export class InitService {
       return ok(undefined);
     } catch (e) {
       return err(
-        new Error(`Failed to write version: ${e instanceof Error ? e.message : String(e)}`),
+        new Error(
+          `Failed to write version: ${
+            e instanceof Error ? e.message : String(e)
+          }`
+        )
       );
     }
   }
@@ -287,7 +367,7 @@ export class InitService {
    */
   private resolveProviders(
     selected: ProviderName[] | undefined,
-    detected: DetectedProviders,
+    detected: DetectedProviders
   ): ProviderName[] {
     if (selected && selected.length > 0) {
       return selected.filter((p) => detected[p]);
@@ -308,7 +388,11 @@ export class InitService {
     const toInstall = this.resolveProviders(options.providers, detected);
 
     if (toInstall.length === 0) {
-      return err(new Error("No AI providers detected. Install Claude Code or opencode first."));
+      return err(
+        new Error(
+          "No AI providers detected. Install Claude Code or opencode first."
+        )
+      );
     }
 
     // 1. Create user-owned directories
@@ -325,12 +409,12 @@ export class InitService {
       return err(new Error(`Library link failed: ${linkResult.error.message}`));
     }
 
-    // 4. Copy user templates (per-file, no overwrite)
-    const userFiles = await this.copyUserTemplates();
+    // 4. Copy user templates (per-file, no overwrite, render .eta with names)
+    const userFiles = await this.copyUserTemplates(options.personalization);
     if (!userFiles.ok) return userFiles;
 
-    // 5. Copy config.json (no overwrite)
-    const configFiles = await this.copyDefaultConfig();
+    // 5. Copy config.json (no overwrite, inject names if provided)
+    const configFiles = await this.copyDefaultConfig(options.personalization);
     if (!configFiles.ok) return configFiles;
 
     // 6. Write installed version (best-effort — non-critical)

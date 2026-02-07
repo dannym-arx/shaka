@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { lstat, mkdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import {
+  lstat,
+  mkdir,
+  readlink,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
 import { InitService } from "../../../src/services/init-service";
@@ -134,10 +141,67 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value.length).toBeGreaterThan(0);
-        // Should include the default user templates
+        // Should include the default user templates (rendered from .eta)
         expect(result.value.some((f) => f.endsWith("user.md"))).toBe(true);
         expect(result.value.some((f) => f.endsWith("assistant.md"))).toBe(true);
       }
+    });
+
+    test("renders .eta templates with default names when no personalization", async () => {
+      const service = createService();
+      await service.createDirectories();
+
+      await service.copyUserTemplates();
+
+      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      expect(userContent).toContain("**Name:** Chief");
+      expect(userContent).not.toContain("<%=");
+
+      const assistantContent = await Bun.file(
+        `${testHome}/user/assistant.md`
+      ).text();
+      expect(assistantContent).toContain("**Name:** Shaka");
+      expect(assistantContent).not.toContain("<%=");
+    });
+
+    test("renders .eta templates with personalized names", async () => {
+      const service = createService();
+      await service.createDirectories();
+
+      await service.copyUserTemplates({
+        principalName: "Master Bruce",
+        assistantName: "Alfred",
+      });
+
+      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      expect(userContent).toContain("**Name:** Master Bruce");
+
+      const assistantContent = await Bun.file(
+        `${testHome}/user/assistant.md`
+      ).text();
+      expect(assistantContent).toContain("**Name:** Alfred");
+      // Verify name substitution in examples too
+      expect(assistantContent).toContain("Alfred found the issue");
+      expect(assistantContent).toContain("When speaking to Master Bruce");
+    });
+
+    test("writes .md output files not .eta files", async () => {
+      const service = createService();
+      await service.createDirectories();
+
+      await service.copyUserTemplates();
+
+      // Output should be .md, not .eta
+      expect(await Bun.file(`${testHome}/user/user.md`).exists()).toBe(true);
+      expect(await Bun.file(`${testHome}/user/assistant.md`).exists()).toBe(
+        true
+      );
+      expect(await Bun.file(`${testHome}/user/user.md.eta`).exists()).toBe(
+        false
+      );
+      expect(await Bun.file(`${testHome}/user/assistant.md.eta`).exists()).toBe(
+        false
+      );
     });
 
     test("does not overwrite existing user files", async () => {
@@ -180,7 +244,9 @@ describe("InitService", () => {
         expect(result.value.some((f) => f.endsWith("goals.md"))).toBe(false);
         // New templates should be copied
         expect(result.value.some((f) => f.endsWith("assistant.md"))).toBe(true);
-        expect(result.value.some((f) => f.endsWith("tech-stack.md"))).toBe(true);
+        expect(result.value.some((f) => f.endsWith("tech-stack.md"))).toBe(
+          true
+        );
       }
     });
   });
@@ -201,6 +267,26 @@ describe("InitService", () => {
       expect(content.version).toBe("0.1.0");
     });
 
+    test("creates config.json with personalized names", async () => {
+      const service = createService();
+      await service.createDirectories();
+
+      const result = await service.copyDefaultConfig({
+        principalName: "Master Bruce",
+        assistantName: "Alfred",
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).toContain(`${testHome}/config.json`);
+      }
+
+      const content = await Bun.file(`${testHome}/config.json`).json();
+      expect(content.principal.name).toBe("Master Bruce");
+      expect(content.assistant.name).toBe("Alfred");
+      expect(content.version).toBe("0.1.0");
+    });
+
     test("does not overwrite existing config.json", async () => {
       const service = createService();
       await service.createDirectories();
@@ -218,12 +304,38 @@ describe("InitService", () => {
       const content = await Bun.file(`${testHome}/config.json`).text();
       expect(content).toBe(existingContent);
     });
+
+    test("does not overwrite existing config.json even with personalization", async () => {
+      const service = createService();
+      await service.createDirectories();
+
+      await Bun.write(
+        `${testHome}/config.json`,
+        '{"version":"0.1.0","assistant":{"name":"Old"}}'
+      );
+
+      const result = await service.copyDefaultConfig({
+        principalName: "New",
+        assistantName: "New",
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value).not.toContain(`${testHome}/config.json`);
+      }
+
+      const content = await Bun.file(`${testHome}/config.json`).json();
+      expect(content.assistant.name).toBe("Old");
+    });
   });
 
   describe("linkLibrary", () => {
     test("calls bun link twice — register then link shaka", async () => {
       const calls: Array<{ cwd: string; args: string[] }> = [];
-      const trackingBunLink = async (cwd: string, args: string[]): Promise<Result<void, Error>> => {
+      const trackingBunLink = async (
+        cwd: string,
+        args: string[]
+      ): Promise<Result<void, Error>> => {
         calls.push({ cwd, args });
         return ok(undefined);
       };
@@ -394,7 +506,10 @@ describe("InitService", () => {
 
       // User customizes a file
       await Bun.write(`${testHome}/user/user.md`, "# Custom content");
-      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.0","custom":true}');
+      await Bun.write(
+        `${testHome}/config.json`,
+        '{"version":"0.1.0","custom":true}'
+      );
 
       // Re-init
       const result = await service.init();
@@ -408,6 +523,85 @@ describe("InitService", () => {
       // Config preserved
       const config = await Bun.file(`${testHome}/config.json`).json();
       expect(config.custom).toBe(true);
+    });
+
+    test("init with personalization renders templates and config with names", async () => {
+      const service = createService();
+
+      const result = await service.init({
+        personalization: {
+          principalName: "Master Bruce",
+          assistantName: "Alfred",
+        },
+      });
+
+      expect(result.ok).toBe(true);
+
+      // User templates rendered with names
+      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      expect(userContent).toContain("**Name:** Master Bruce");
+
+      const assistantContent = await Bun.file(
+        `${testHome}/user/assistant.md`
+      ).text();
+      expect(assistantContent).toContain("**Name:** Alfred");
+
+      // Config has personalized names
+      const config = await Bun.file(`${testHome}/config.json`).json();
+      expect(config.principal.name).toBe("Master Bruce");
+      expect(config.assistant.name).toBe("Alfred");
+    });
+
+    test("init without personalization uses default names", async () => {
+      const service = createService();
+
+      const result = await service.init();
+
+      expect(result.ok).toBe(true);
+
+      // User templates rendered with defaults
+      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      expect(userContent).toContain("**Name:** Chief");
+
+      const assistantContent = await Bun.file(
+        `${testHome}/user/assistant.md`
+      ).text();
+      expect(assistantContent).toContain("**Name:** Shaka");
+
+      // Config has default names
+      const config = await Bun.file(`${testHome}/config.json`).json();
+      expect(config.principal.name).toBe("Chief");
+      expect(config.assistant.name).toBe("Shaka");
+    });
+
+    test("re-init with personalization does not overwrite existing files", async () => {
+      const service = createService();
+
+      // First init with personalization
+      await service.init({
+        personalization: {
+          principalName: "Master Bruce",
+          assistantName: "Alfred",
+        },
+      });
+
+      // Verify initial state
+      const initialConfig = await Bun.file(`${testHome}/config.json`).json();
+      expect(initialConfig.principal.name).toBe("Master Bruce");
+
+      // Re-init with different names — should NOT overwrite
+      const result = await service.init({
+        personalization: { principalName: "Other", assistantName: "Bot" },
+      });
+
+      expect(result.ok).toBe(true);
+
+      // Files preserved from first init
+      const config = await Bun.file(`${testHome}/config.json`).json();
+      expect(config.principal.name).toBe("Master Bruce");
+
+      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      expect(userContent).toContain("**Name:** Master Bruce");
     });
   });
 });

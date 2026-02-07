@@ -49,7 +49,7 @@ fi
 # ── Actual init ──────────────────────────────────────────────────────
 
 section "Init"
-shaka init --all
+shaka init --all --defaults
 
 # ── Session start hook ────────────────────────────────────────────────
 

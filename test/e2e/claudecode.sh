@@ -50,7 +50,7 @@ fi
 # ── Actual init ──────────────────────────────────────────────────────
 
 section "Init"
-shaka init --all
+shaka init --all --defaults
 
 # ── Hook registration ─────────────────────────────────────────────────
 

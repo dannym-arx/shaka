@@ -8,7 +8,7 @@ Essential facts that help your AI assistant understand you and work effectively.
 
 ## Quick Facts
 
-- **Name:** [Your name]
+- **Name:** <%= it.principalName %>
 - **Preferred Name:** [Nickname or how you like to be addressed]
 - **Timezone:** [e.g., PST, EST, UTC+1]
 - **Location:** [City, Country]
