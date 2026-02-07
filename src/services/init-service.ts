@@ -9,7 +9,11 @@
 import { lstat, mkdir, readdir, readlink, rm, symlink } from "node:fs/promises";
 import { type Result, err, ok } from "../domain/result";
 import { getCurrentVersion } from "../domain/version";
-import { type DetectedProviders, detectInstalledProviders } from "./provider-detection";
+import {
+  type DetectedProviders,
+  type ProviderName,
+  detectInstalledProviders,
+} from "./provider-detection";
 
 // Resolve defaults directory relative to this module
 const DEFAULT_DEFAULTS_PATH = new URL("../../defaults", import.meta.url).pathname;
@@ -28,7 +32,8 @@ export interface InitServiceConfig {
 }
 
 export interface InitOptions {
-  provider?: "claude" | "opencode";
+  /** Specific providers to install. If empty/undefined, installs all detected. */
+  providers?: ProviderName[];
   force?: boolean;
 }
 
@@ -278,24 +283,29 @@ export class InitService {
   }
 
   /**
+   * Determine which providers to install based on selection and detection.
+   */
+  private resolveProviders(
+    selected: ProviderName[] | undefined,
+    detected: DetectedProviders,
+  ): ProviderName[] {
+    if (selected && selected.length > 0) {
+      return selected.filter((p) => detected[p]);
+    }
+    const all: ProviderName[] = [];
+    if (detected.claude) all.push("claude");
+    if (detected.opencode) all.push("opencode");
+    return all;
+  }
+
+  /**
    * Run full initialization.
    */
   async init(options: InitOptions = {}): Promise<Result<InitResult, Error>> {
     const detected = await this.detectProviders();
     const currentVersion = getCurrentVersion();
 
-    // Determine which providers to install
-    const toInstall: Array<"claude" | "opencode"> = [];
-
-    if (options.provider) {
-      if (!detected[options.provider]) {
-        return err(new Error(`Provider '${options.provider}' is not installed`));
-      }
-      toInstall.push(options.provider);
-    } else {
-      if (detected.claude) toInstall.push("claude");
-      if (detected.opencode) toInstall.push("opencode");
-    }
+    const toInstall = this.resolveProviders(options.providers, detected);
 
     if (toInstall.length === 0) {
       return err(new Error("No AI providers detected. Install Claude Code or opencode first."));

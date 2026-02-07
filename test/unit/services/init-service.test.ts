@@ -329,12 +329,12 @@ describe("InitService", () => {
       }
     });
 
-    test("respects --provider flag", async () => {
+    test("respects providers array — installs only selected", async () => {
       const service = createService({
         detectProviders: async () => ({ claude: true, opencode: true }),
       });
 
-      const result = await service.init({ provider: "claude" });
+      const result = await service.init({ providers: ["claude"] });
 
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -343,16 +343,46 @@ describe("InitService", () => {
       }
     });
 
-    test("returns error if specified provider is not installed", async () => {
+    test("skips unavailable providers in selection", async () => {
       const service = createService({
         detectProviders: async () => ({ claude: false, opencode: true }),
       });
 
-      const result = await service.init({ provider: "claude" });
+      const result = await service.init({ providers: ["claude", "opencode"] });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        // claude requested but not detected — skipped
+        expect(result.value.providers.claude.installed).toBe(false);
+        // opencode requested and detected — installed
+        expect(result.value.providers.opencode.installed).toBe(true);
+      }
+    });
+
+    test("returns error if all selected providers are unavailable", async () => {
+      const service = createService({
+        detectProviders: async () => ({ claude: false, opencode: false }),
+      });
+
+      const result = await service.init({ providers: ["claude"] });
 
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.error.message).toContain("not installed");
+        expect(result.error.message).toContain("No AI providers detected");
+      }
+    });
+
+    test("installs all detected when no providers specified", async () => {
+      const service = createService({
+        detectProviders: async () => ({ claude: true, opencode: true }),
+      });
+
+      const result = await service.init();
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.providers.claude.installed).toBe(true);
+        expect(result.value.providers.opencode.installed).toBe(true);
       }
     });
 

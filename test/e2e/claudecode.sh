@@ -21,7 +21,36 @@ echo "E2E: claude code hooks"
 
 section "Setup"
 bun link
-shaka init
+
+# ── Wrong provider flag ──────────────────────────────────────────────
+
+section "Wrong provider flag"
+
+WRONG_OUTPUT=$(shaka init --opencode 2>&1) && {
+  fail "shaka init --opencode should have failed (opencode not in this container)"
+  exit 1
+} || true
+
+if echo "$WRONG_OUTPUT" | grep -qi "not installed"; then
+  pass "shaka init --opencode shows 'not installed' warning"
+else
+  fail "Missing 'not installed' warning for --opencode"
+  echo "$WRONG_OUTPUT"
+  exit 1
+fi
+
+if echo "$WRONG_OUTPUT" | grep -qi "no selected providers"; then
+  pass "shaka init --opencode shows proper error"
+else
+  fail "Missing error message for unavailable provider"
+  echo "$WRONG_OUTPUT"
+  exit 1
+fi
+
+# ── Actual init ──────────────────────────────────────────────────────
+
+section "Init"
+shaka init --all
 
 # ── Hook registration ─────────────────────────────────────────────────
 

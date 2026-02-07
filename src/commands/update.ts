@@ -100,7 +100,7 @@ async function checkoutAndInit(repoRoot: string, tag: string): Promise<boolean> 
   console.log("Re-initializing...\n");
   const { createInitCommand } = await import("./init");
   const initCmd = createInitCommand();
-  await initCmd.parseAsync(["node", "shaka", "init"], { from: "user" });
+  await initCmd.parseAsync(["node", "shaka", "init", "--all"], { from: "user" });
   return true;
 }
 

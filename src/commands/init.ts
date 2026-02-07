@@ -5,12 +5,123 @@
  * For safe upgrades with version checking, use `shaka update`.
  */
 
+import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
 import { findNewerLocalTag, getGitRef } from "../domain/version";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
 import { type InitResult, InitService } from "../services/init-service";
+import { type DetectedProviders, detectInstalledProviders } from "../services/provider-detection";
+
+const PROVIDER_LABELS: Record<ProviderName, string> = {
+  claude: "Claude Code",
+  opencode: "opencode",
+};
+
+function prompt(message: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(message, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
+}
+
+/**
+ * Resolve which providers to install from CLI flags.
+ * Returns null when interactive prompt is needed.
+ */
+function resolveProvidersFromFlags(
+  options: { claude?: boolean; opencode?: boolean; all?: boolean },
+  detected: DetectedProviders,
+): ProviderName[] | null {
+  const wantClaude = options.claude || options.all;
+  const wantOpencode = options.opencode || options.all;
+
+  if (!wantClaude && !wantOpencode) return null;
+
+  const selected: ProviderName[] = [];
+  const warnings: string[] = [];
+
+  if (wantClaude) {
+    if (detected.claude) {
+      selected.push("claude");
+    } else {
+      warnings.push("Claude Code is not installed.");
+    }
+  }
+
+  if (wantOpencode) {
+    if (detected.opencode) {
+      selected.push("opencode");
+    } else {
+      warnings.push("opencode is not installed.");
+    }
+  }
+
+  for (const w of warnings) {
+    console.log(`  ⚠ ${w}`);
+  }
+
+  if (selected.length === 0) {
+    console.error("\nERROR: No selected providers are available.");
+    console.error("Install Claude Code or opencode first.");
+    process.exit(1);
+  }
+
+  return selected;
+}
+
+/**
+ * Interactive provider selection when no flags are given.
+ */
+async function promptProviderSelection(detected: DetectedProviders): Promise<ProviderName[]> {
+  const available: ProviderName[] = [];
+  if (detected.claude) available.push("claude");
+  if (detected.opencode) available.push("opencode");
+
+  if (available.length === 0) {
+    console.error("ERROR: No AI providers detected. Install Claude Code or opencode first.");
+    process.exit(1);
+  }
+
+  console.log("Detected providers:");
+  console.log(`  Claude Code: ${detected.claude ? "✓ available" : "✗ not found"}`);
+  console.log(`  opencode:    ${detected.opencode ? "✓ available" : "✗ not found"}`);
+  console.log();
+
+  if (available.length === 1) {
+    const name = available[0] as ProviderName;
+    const label = PROVIDER_LABELS[name];
+    console.log(`Only ${label} is available — installing it.\n`);
+    return available;
+  }
+
+  // Both available — let user choose
+  console.log("Which providers do you want to install?");
+  console.log("  1. Claude Code");
+  console.log("  2. opencode");
+  console.log("  3. Both");
+  console.log();
+
+  const answer = await prompt("Select [1/2/3]: ");
+
+  switch (answer) {
+    case "1":
+      return ["claude"];
+    case "2":
+      return ["opencode"];
+    case "3":
+      return ["claude", "opencode"];
+    default:
+      console.log(
+        "Invalid selection. Use 1, 2, or 3. (Or re-run with --claude, --opencode, or --all)",
+      );
+      process.exit(1);
+  }
+}
 
 function logProviderStatus(providers: InitResult["providers"]): void {
   console.log("Detecting providers...");
@@ -51,10 +162,29 @@ function logCreatedItems(result: InitResult): void {
   }
 }
 
+async function logVersionInfo(result: InitResult): Promise<void> {
+  const repoRoot = new URL("../..", import.meta.url).pathname;
+  const ref = await getGitRef(repoRoot);
+  const refLabel = ref
+    ? ref.type === "tag"
+      ? ref.label
+      : `v${result.currentVersion} (${ref.label})`
+    : `v${result.currentVersion}`;
+
+  console.log(`\n✅ Shaka initialized successfully — running on ${refLabel}`);
+
+  const newerTag = await findNewerLocalTag(repoRoot);
+  if (newerTag) {
+    console.log(`   Update available: ${newerTag}. Run \`shaka update\` to upgrade.`);
+  }
+}
+
 export function createInitCommand(): Command {
   return new Command("init")
     .description("Initialize Shaka configuration")
-    .option("--provider <provider>", "Only set up specific provider (claude or opencode)")
+    .option("--claude", "Install hooks for Claude Code")
+    .option("--opencode", "Install hooks for opencode")
+    .option("--all", "Install hooks for all detected providers")
     .option("--force", "Overwrite existing configuration")
     .action(async (options) => {
       const shakaHome = resolveShakaHome({
@@ -63,12 +193,17 @@ export function createInitCommand(): Command {
         HOME: process.env.HOME,
       });
 
-      const initService = new InitService({ shakaHome });
-
       console.log("Initializing Shaka...\n");
 
+      const detected = await detectInstalledProviders();
+      const flagProviders = resolveProvidersFromFlags(options, detected);
+      const selectedProviders = flagProviders ?? (await promptProviderSelection(detected));
+
+      console.log();
+
+      const initService = new InitService({ shakaHome });
       const result = await initService.init({
-        provider: options.provider,
+        providers: selectedProviders,
         force: options.force,
       });
 
@@ -77,27 +212,9 @@ export function createInitCommand(): Command {
         process.exit(1);
       }
 
-      const { providers } = result.value;
-
-      logProviderStatus(providers);
-      await installProviderHooks(providers, shakaHome);
+      logProviderStatus(result.value.providers);
+      await installProviderHooks(result.value.providers, shakaHome);
       logCreatedItems(result.value);
-
-      // Show what we're running on: tag or commit
-      const repoRoot = new URL("../..", import.meta.url).pathname;
-      const ref = await getGitRef(repoRoot);
-      const refLabel = ref
-        ? ref.type === "tag"
-          ? ref.label
-          : `v${result.value.currentVersion} (${ref.label})`
-        : `v${result.value.currentVersion}`;
-
-      console.log(`\n✅ Shaka initialized successfully — running on ${refLabel}`);
-
-      // Lightweight local check — no network call
-      const newerTag = await findNewerLocalTag(repoRoot);
-      if (newerTag) {
-        console.log(`   Update available: ${newerTag}. Run \`shaka update\` to upgrade.`);
-      }
+      await logVersionInfo(result.value);
     });
 }
