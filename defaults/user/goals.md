@@ -2,21 +2,7 @@
 
 **Specific objectives you're working toward.**
 
-Goals support your missions and represent concrete outcomes you want to achieve.
-
----
-
-## Missions (High-Level)
-
-Define your core missions. Goals support these.
-
-### M0: [Primary Mission]
-
-[One sentence describing your main mission]
-
-### M1: [Secondary Mission]
-
-[One sentence describing another mission]
+Goals support your missions (see `missions.md`) and represent concrete outcomes you want to achieve.
 
 ---
 

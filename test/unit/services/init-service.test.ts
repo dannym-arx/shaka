@@ -135,7 +135,7 @@ describe("InitService", () => {
       if (result.ok) {
         expect(result.value.length).toBeGreaterThan(0);
         // Should include the default user templates
-        expect(result.value.some((f) => f.endsWith("about-me.md"))).toBe(true);
+        expect(result.value.some((f) => f.endsWith("user.md"))).toBe(true);
         expect(result.value.some((f) => f.endsWith("assistant.md"))).toBe(true);
       }
     });
@@ -146,20 +146,20 @@ describe("InitService", () => {
 
       // Create an existing user file
       const customContent = "# My custom about me";
-      await Bun.write(`${testHome}/user/about-me.md`, customContent);
+      await Bun.write(`${testHome}/user/user.md`, customContent);
 
       const result = await service.copyUserTemplates();
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        // about-me.md should NOT be in the list of created files
-        expect(result.value.some((f) => f.endsWith("about-me.md"))).toBe(false);
+        // user.md should NOT be in the list of created files
+        expect(result.value.some((f) => f.endsWith("user.md"))).toBe(false);
         // But other templates should be copied
         expect(result.value.some((f) => f.endsWith("assistant.md"))).toBe(true);
       }
 
       // Verify existing file was NOT overwritten
-      const content = await Bun.file(`${testHome}/user/about-me.md`).text();
+      const content = await Bun.file(`${testHome}/user/user.md`).text();
       expect(content).toBe(customContent);
     });
 
@@ -168,7 +168,7 @@ describe("InitService", () => {
       await service.createDirectories();
 
       // Simulate existing installation with some user files
-      await Bun.write(`${testHome}/user/about-me.md`, "existing");
+      await Bun.write(`${testHome}/user/user.md`, "existing");
       await Bun.write(`${testHome}/user/goals.md`, "existing");
 
       const result = await service.copyUserTemplates();
@@ -176,7 +176,7 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         // Only files that didn't exist should be copied
-        expect(result.value.some((f) => f.endsWith("about-me.md"))).toBe(false);
+        expect(result.value.some((f) => f.endsWith("user.md"))).toBe(false);
         expect(result.value.some((f) => f.endsWith("goals.md"))).toBe(false);
         // New templates should be copied
         expect(result.value.some((f) => f.endsWith("assistant.md"))).toBe(true);
@@ -311,7 +311,7 @@ describe("InitService", () => {
       expect(version.trim()).toBe("0.1.0");
 
       // Verify user templates were copied
-      expect(await Bun.file(`${testHome}/user/about-me.md`).exists()).toBe(true);
+      expect(await Bun.file(`${testHome}/user/user.md`).exists()).toBe(true);
 
       // Verify config was copied
       expect(await Bun.file(`${testHome}/config.json`).exists()).toBe(true);
@@ -393,7 +393,7 @@ describe("InitService", () => {
       await service.init();
 
       // User customizes a file
-      await Bun.write(`${testHome}/user/about-me.md`, "# Custom content");
+      await Bun.write(`${testHome}/user/user.md`, "# Custom content");
       await Bun.write(`${testHome}/config.json`, '{"version":"0.1.0","custom":true}');
 
       // Re-init
@@ -402,7 +402,7 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
 
       // User file preserved
-      const aboutMe = await Bun.file(`${testHome}/user/about-me.md`).text();
+      const aboutMe = await Bun.file(`${testHome}/user/user.md`).text();
       expect(aboutMe).toBe("# Custom content");
 
       // Config preserved

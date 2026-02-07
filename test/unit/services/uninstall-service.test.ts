@@ -120,7 +120,7 @@ describe("UninstallService", () => {
     test("removes user/, customizations/, memory/", async () => {
       await setupInitializedHome();
       // Add some user content
-      await writeFile(`${testHome}/user/about-me.md`, "custom content");
+      await writeFile(`${testHome}/user/user.md`, "custom content");
 
       const service = createService();
       const removed = await service.removeUserData();

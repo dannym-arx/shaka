@@ -259,19 +259,23 @@ Load additional context dynamically based on what the task requires. Don't load 
 
 ### User Context Files
 
-| Trigger                               | File                 | Purpose                         |
-| ------------------------------------- | -------------------- | ------------------------------- |
-| Technical questions, stack choices    | `user/tech-stack.md` | Technology preferences          |
-| Goals, priorities, what to focus on   | `user/goals.md`      | Current objectives and missions |
-| Communication style questions         | `user/assistant.md`  | How to behave and communicate   |
-| Personal info needed (timezone, etc.) | `user/about-me.md`   | User quick facts                |
+| Trigger                               | File                 | Purpose                            |
+| ------------------------------------- | -------------------- | ---------------------------------- |
+| Personal info needed (timezone, etc.) | `user/user.md`       | User quick facts and handles       |
+| Communication style questions         | `user/assistant.md`  | How to behave and communicate      |
+| Purpose or direction questions        | `user/missions.md`   | High-level missions (TELOS-lite)   |
+| Goals, priorities, what to focus on   | `user/goals.md`      | Specific objectives                |
+| Project context or paths needed       | `user/projects.md`   | Active projects, paths, deployment |
+| Technical questions, stack choices    | `user/tech-stack.md` | Technology preferences             |
 
 ### When to Load
 
-- **tech-stack.md**: When choosing frameworks, libraries, or technical approaches
-- **goals.md**: When prioritizing work or understanding broader context
+- **user.md**: When user info is needed (timezone, preferences, handles)
 - **assistant.md**: When uncertain about communication style or behavior
-- **about-me.md**: When user info is needed (timezone, preferences, etc.)
+- **missions.md**: When understanding broader purpose or direction
+- **goals.md**: When prioritizing work or understanding objectives
+- **projects.md**: When project context, paths, or deployment info is needed
+- **tech-stack.md**: When choosing frameworks, libraries, or technical approaches
 
 **Principle:** Load on-demand, not upfront. Keep context focused on the current task.
 

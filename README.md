@@ -81,14 +81,13 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 ```text
 ~/.config/shaka/              # XDG-compliant, provider-agnostic
 ├── user/                     # YOUR content (flat, portable, backed up)
-│   ├── identity.md           # Who you are
-│   ├── preferences.md        # Your defaults
-│   ├── beliefs.md            # What you believe
-│   ├── missions.md           # High-level aspirations
+│   ├── user.md               # Who you are (name, timezone, handles)
+│   ├── assistant.md          # How your assistant behaves
+│   ├── missions.md           # High-level purpose (TELOS-lite)
 │   ├── goals.md              # Specific objectives
-│   ├── projects.md           # Current work
-│   └── challenges.md         # Problems you're tackling
-│   └── ...
+│   ├── projects.md           # Active projects and paths
+│   └── tech-stack.md         # Preferred technologies
+│   └── ...                   # Add more files as needed, these are auto-loaded at session start
 │
 ├── memory/                   # What Shaka LEARNS about you (dynamic)
 │   └── ...                   # Security logs, patterns (search TBD)

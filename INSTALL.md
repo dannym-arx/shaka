@@ -114,12 +114,14 @@ Edit `~/.config/shaka/config.json` to customize:
 
 Files in `~/.config/shaka/user/` are loaded at session start:
 
-| File             | Purpose                                |
-| ---------------- | -------------------------------------- |
-| `about-me.md`   | Who you are, your background           |
-| `goals.md`      | Current objectives                     |
-| `tech-stack.md` | Your preferred technologies            |
-| `assistant.md`  | How you want your assistant to behave  |
+| File            | Purpose                               |
+| --------------- | ------------------------------------- |
+| `user.md`       | Who you are (name, timezone, handles) |
+| `assistant.md`  | How your assistant behaves            |
+| `missions.md`   | High-level purpose (TELOS-lite)       |
+| `goals.md`      | Specific objectives                   |
+| `projects.md`   | Active projects and paths             |
+| `tech-stack.md` | Your preferred technologies           |
 
 ## Customization
 
@@ -251,7 +253,7 @@ rm -rf ~/.config/shaka
 
 ## Next Steps
 
-- Edit `~/.config/shaka/user/about-me.md` to tell Shaka about yourself
+- Edit `~/.config/shaka/user/user.md` to tell Shaka about yourself
 - Run `claude` or `opencode` and see the context injection in action
 - Explore `~/.config/shaka/system/` to understand available hooks and tools
 - Run `shaka update` periodically to get the latest framework updates
