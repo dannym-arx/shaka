@@ -47,5 +47,8 @@ experiments
 # Docker persistent state (auth tokens)
 .docker-state
 
+# Plans (local development notes)
+plans
+
 # Other local files
 misc-docs
