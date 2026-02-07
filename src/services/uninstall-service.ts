@@ -10,6 +10,7 @@
 
 import { lstat, readdir, rm } from "node:fs/promises";
 import { type Result, ok } from "../domain/result";
+import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
 import { type DetectedProviders, detectInstalledProviders } from "./provider-detection";
@@ -59,6 +60,12 @@ export class UninstallService {
       const provider = createProvider(name);
       const hookResult = await provider.uninstallHooks();
       result[name].uninstalled = hookResult.ok;
+    }
+
+    // Unregister MCP server from Claude Code
+    if (detected.claude) {
+      const claude = createProvider("claude") as ClaudeProviderConfigurer;
+      await claude.unregisterMcpServer();
     }
 
     return result;

@@ -55,12 +55,15 @@ Tools use [opencode's format](https://opencode.ai/docs/custom-tools/) as the can
 
 ### Setup
 
-```bash
-# Claude Code: register the MCP server
-claude mcp add shaka --transport stdio -- shaka mcp serve
+`shaka init` handles tool integration automatically:
 
-# opencode: tools are symlinked automatically during init
-# ~/.config/shaka/system/tools/ → .opencode/tools/
+- **Claude Code**: Registers the MCP server via `claude mcp add shaka -s user -- shaka mcp serve`
+- **opencode**: Tools are symlinked automatically during init
+
+To manually register or re-register the MCP server:
+
+```bash
+claude mcp add shaka -s user -- shaka mcp serve
 ```
 
 ### MCP Server

@@ -280,6 +280,83 @@ export const MATCHER = ["Bash"] as const;
       expect(result.issues).toContain("No Shaka hooks configured");
     });
   });
+
+  describe("registerMcpServer", () => {
+    test("calls claude mcp add with correct arguments", async () => {
+      const calls: string[][] = [];
+      const mockRunCommand = async (args: string[]) => {
+        calls.push(args);
+        return { exitCode: 0, stderr: "" };
+      };
+      const configurer = new ClaudeProviderConfigurer({
+        claudeHome: testClaudeHome,
+        runCommand: mockRunCommand,
+      });
+
+      const result = await configurer.registerMcpServer();
+
+      expect(result.ok).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toEqual([
+        "claude", "mcp", "add", "shaka", "-s", "user", "--", "shaka", "mcp", "serve",
+      ]);
+    });
+
+    test("returns error when claude mcp add fails", async () => {
+      const mockRunCommand = async () => ({
+        exitCode: 1,
+        stderr: "command not found",
+      });
+      const configurer = new ClaudeProviderConfigurer({
+        claudeHome: testClaudeHome,
+        runCommand: mockRunCommand,
+      });
+
+      const result = await configurer.registerMcpServer();
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("claude mcp add failed");
+      }
+    });
+  });
+
+  describe("unregisterMcpServer", () => {
+    test("calls claude mcp remove with correct arguments", async () => {
+      const calls: string[][] = [];
+      const mockRunCommand = async (args: string[]) => {
+        calls.push(args);
+        return { exitCode: 0, stderr: "" };
+      };
+      const configurer = new ClaudeProviderConfigurer({
+        claudeHome: testClaudeHome,
+        runCommand: mockRunCommand,
+      });
+
+      const result = await configurer.unregisterMcpServer();
+
+      expect(result.ok).toBe(true);
+      expect(calls).toHaveLength(1);
+      expect(calls[0]).toEqual([
+        "claude", "mcp", "remove", "shaka", "-s", "user",
+      ]);
+    });
+
+    test("succeeds even if server not found", async () => {
+      const mockRunCommand = async () => ({
+        exitCode: 1,
+        stderr: "Server shaka not found",
+      });
+      const configurer = new ClaudeProviderConfigurer({
+        claudeHome: testClaudeHome,
+        runCommand: mockRunCommand,
+      });
+
+      const result = await configurer.unregisterMcpServer();
+
+      expect(result.ok).toBe(true);
+    });
+  });
 });
 
 describe("Hook Discovery (shared)", () => {

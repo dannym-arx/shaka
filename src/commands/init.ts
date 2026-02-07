@@ -9,6 +9,7 @@ import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
 import { findNewerLocalTag, getGitRef } from "../domain/version";
+import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
 import { type InitResult, InitService } from "../services/init-service";
@@ -143,6 +144,17 @@ async function installProviderHooks(
       } else {
         console.log(`  ✓ Installed ${providerName} hooks`);
       }
+    }
+  }
+
+  // Register MCP server for Claude Code (enables tool integration)
+  if (providers.claude.installed) {
+    const claude = createProvider("claude") as ClaudeProviderConfigurer;
+    const mcpResult = await claude.registerMcpServer();
+    if (!mcpResult.ok) {
+      console.error(`  ✗ Failed to register MCP server: ${mcpResult.error.message}`);
+    } else {
+      console.log("  ✓ Registered Shaka MCP server with Claude Code");
     }
   }
 }

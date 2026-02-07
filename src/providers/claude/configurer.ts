@@ -15,6 +15,14 @@ import {
 } from "../hook-discovery";
 import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
 
+/** Default command runner using Bun.spawn. */
+async function defaultRunCommand(args: string[]): Promise<{ exitCode: number; stderr: string }> {
+  const proc = Bun.spawn(args, { stdout: "pipe", stderr: "pipe" });
+  const exitCode = await proc.exited;
+  const stderr = await new Response(proc.stderr).text();
+  return { exitCode, stderr: stderr.trim() };
+}
+
 interface ClaudeHookEntry {
   matcher?: string;
   hooks: Array<{
@@ -116,9 +124,14 @@ function groupHooksByEvent(hooks: DiscoveredHook[]): Map<HookEvent, DiscoveredHo
 export class ClaudeProviderConfigurer implements ProviderConfigurer {
   readonly name = "claude" as const;
   private readonly claudeHome: string;
+  private readonly runCommand: (args: string[]) => Promise<{ exitCode: number; stderr: string }>;
 
-  constructor(options?: { claudeHome?: string }) {
+  constructor(options?: {
+    claudeHome?: string;
+    runCommand?: (args: string[]) => Promise<{ exitCode: number; stderr: string }>;
+  }) {
     this.claudeHome = options?.claudeHome ?? `${process.env.HOME}/.claude`;
+    this.runCommand = options?.runCommand ?? defaultRunCommand;
   }
 
   async isInstalled(): Promise<boolean> {
@@ -147,6 +160,61 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       return ok(undefined);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
+    }
+  }
+
+  /**
+   * Register the Shaka MCP server with Claude Code.
+   * Uses `claude mcp add` for correct config format and scope handling.
+   * Idempotent — re-adding the same name overwrites the existing entry.
+   */
+  async registerMcpServer(): Promise<Result<void, Error>> {
+    try {
+      const { exitCode, stderr } = await this.runCommand([
+        "claude",
+        "mcp",
+        "add",
+        "shaka",
+        "-s",
+        "user",
+        "--",
+        "shaka",
+        "mcp",
+        "serve",
+      ]);
+      if (exitCode !== 0) {
+        return err(new Error(`claude mcp add failed (exit ${exitCode}): ${stderr}`));
+      }
+      return ok(undefined);
+    } catch (e) {
+      return err(
+        new Error(`Failed to register MCP server: ${e instanceof Error ? e.message : String(e)}`),
+      );
+    }
+  }
+
+  /**
+   * Unregister the Shaka MCP server from Claude Code.
+   */
+  async unregisterMcpServer(): Promise<Result<void, Error>> {
+    try {
+      const { exitCode, stderr } = await this.runCommand([
+        "claude",
+        "mcp",
+        "remove",
+        "shaka",
+        "-s",
+        "user",
+      ]);
+      // Exit code non-zero is OK if server doesn't exist
+      if (exitCode !== 0 && !stderr.includes("not found")) {
+        return err(new Error(`claude mcp remove failed (exit ${exitCode}): ${stderr}`));
+      }
+      return ok(undefined);
+    } catch (e) {
+      return err(
+        new Error(`Failed to unregister MCP server: ${e instanceof Error ? e.message : String(e)}`),
+      );
     }
   }
 
