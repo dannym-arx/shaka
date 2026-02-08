@@ -29,7 +29,7 @@ A personal AI assistant framework. Provider-agnostic. Clear architecture. Your d
 ## Getting Started
 
 ```bash
-git clone <repo-url> shaka
+git clone https://github.com/jgmontoya/shaka.git
 cd shaka
 bun install
 bun link

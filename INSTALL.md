@@ -14,7 +14,7 @@ Get Shaka running in under 5 minutes.
 
 ```bash
 # Clone the repository
-git clone https://github.com/your-org/shaka.git
+git clone https://github.com/jgmontoya/shaka.git
 cd shaka
 
 # Install dependencies
