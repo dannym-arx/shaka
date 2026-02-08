@@ -15,7 +15,6 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { parse as parseYaml } from "yaml";
 import {
   type PatternsConfig,
   type ValidationResult,
@@ -24,6 +23,7 @@ import {
   validateBashCommand,
   validatePath,
 } from "shaka";
+import { parse as parseYaml } from "yaml";
 
 /** Hook trigger events */
 export const TRIGGER = ["tool.before"] as const;
@@ -59,7 +59,11 @@ function loadPatterns(shakaHome: string): PatternsConfig {
   const customPath = `${shakaHome}/customizations/security/patterns.yaml`;
   const systemPath = `${shakaHome}/system/security/patterns.yaml`;
 
-  const patternsPath = existsSync(customPath) ? customPath : existsSync(systemPath) ? systemPath : null;
+  const patternsPath = existsSync(customPath)
+    ? customPath
+    : existsSync(systemPath)
+      ? systemPath
+      : null;
 
   if (!patternsPath) {
     return emptyPatternsConfig();
@@ -154,6 +158,7 @@ function handleValidationResult(
       console.error(`[SHAKA SECURITY] BLOCKED: ${result.reason}`);
       console.error(`Target: ${target.slice(0, 100)}`);
       process.exit(2);
+      break; // unreachable, but satisfies linter
 
     case "confirm":
       logSecurityEvent(shakaHome, event);

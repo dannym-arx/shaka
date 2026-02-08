@@ -1,12 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import {
-  lstat,
-  mkdir,
-  readlink,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises";
+import { lstat, mkdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
 import { InitService } from "../../../src/services/init-service";
@@ -157,9 +150,7 @@ describe("InitService", () => {
       expect(userContent).toContain("**Name:** Chief");
       expect(userContent).not.toContain("<%=");
 
-      const assistantContent = await Bun.file(
-        `${testHome}/user/assistant.md`
-      ).text();
+      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
       expect(assistantContent).toContain("**Name:** Shaka");
       expect(assistantContent).not.toContain("<%=");
     });
@@ -176,9 +167,7 @@ describe("InitService", () => {
       const userContent = await Bun.file(`${testHome}/user/user.md`).text();
       expect(userContent).toContain("**Name:** Master Bruce");
 
-      const assistantContent = await Bun.file(
-        `${testHome}/user/assistant.md`
-      ).text();
+      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
       expect(assistantContent).toContain("**Name:** Alfred");
       // Verify name substitution in examples too
       expect(assistantContent).toContain("Alfred found the issue");
@@ -193,15 +182,9 @@ describe("InitService", () => {
 
       // Output should be .md, not .eta
       expect(await Bun.file(`${testHome}/user/user.md`).exists()).toBe(true);
-      expect(await Bun.file(`${testHome}/user/assistant.md`).exists()).toBe(
-        true
-      );
-      expect(await Bun.file(`${testHome}/user/user.md.eta`).exists()).toBe(
-        false
-      );
-      expect(await Bun.file(`${testHome}/user/assistant.md.eta`).exists()).toBe(
-        false
-      );
+      expect(await Bun.file(`${testHome}/user/assistant.md`).exists()).toBe(true);
+      expect(await Bun.file(`${testHome}/user/user.md.eta`).exists()).toBe(false);
+      expect(await Bun.file(`${testHome}/user/assistant.md.eta`).exists()).toBe(false);
     });
 
     test("does not overwrite existing user files", async () => {
@@ -244,9 +227,7 @@ describe("InitService", () => {
         expect(result.value.some((f) => f.endsWith("goals.md"))).toBe(false);
         // New templates should be copied
         expect(result.value.some((f) => f.endsWith("assistant.md"))).toBe(true);
-        expect(result.value.some((f) => f.endsWith("tech-stack.md"))).toBe(
-          true
-        );
+        expect(result.value.some((f) => f.endsWith("tech-stack.md"))).toBe(true);
       }
     });
   });
@@ -309,10 +290,7 @@ describe("InitService", () => {
       const service = createService();
       await service.createDirectories();
 
-      await Bun.write(
-        `${testHome}/config.json`,
-        '{"version":"0.1.0","assistant":{"name":"Old"}}'
-      );
+      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.0","assistant":{"name":"Old"}}');
 
       const result = await service.copyDefaultConfig({
         principalName: "New",
@@ -332,10 +310,7 @@ describe("InitService", () => {
   describe("linkLibrary", () => {
     test("calls bun link twice — register then link shaka", async () => {
       const calls: Array<{ cwd: string; args: string[] }> = [];
-      const trackingBunLink = async (
-        cwd: string,
-        args: string[]
-      ): Promise<Result<void, Error>> => {
+      const trackingBunLink = async (cwd: string, args: string[]): Promise<Result<void, Error>> => {
         calls.push({ cwd, args });
         return ok(undefined);
       };
@@ -506,10 +481,7 @@ describe("InitService", () => {
 
       // User customizes a file
       await Bun.write(`${testHome}/user/user.md`, "# Custom content");
-      await Bun.write(
-        `${testHome}/config.json`,
-        '{"version":"0.1.0","custom":true}'
-      );
+      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.0","custom":true}');
 
       // Re-init
       const result = await service.init();
@@ -541,9 +513,7 @@ describe("InitService", () => {
       const userContent = await Bun.file(`${testHome}/user/user.md`).text();
       expect(userContent).toContain("**Name:** Master Bruce");
 
-      const assistantContent = await Bun.file(
-        `${testHome}/user/assistant.md`
-      ).text();
+      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
       expect(assistantContent).toContain("**Name:** Alfred");
 
       // Config has personalized names
@@ -563,9 +533,7 @@ describe("InitService", () => {
       const userContent = await Bun.file(`${testHome}/user/user.md`).text();
       expect(userContent).toContain("**Name:** Chief");
 
-      const assistantContent = await Bun.file(
-        `${testHome}/user/assistant.md`
-      ).text();
+      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
       expect(assistantContent).toContain("**Name:** Shaka");
 
       // Config has default names

@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
 import { InitService } from "../../../src/services/init-service";
 import { UninstallService } from "../../../src/services/uninstall-service";
-import type { Result } from "../../../src/domain/result";
 
 describe("UninstallService", () => {
   const testHome = "/tmp/shaka-test-uninstall";
@@ -31,7 +31,8 @@ describe("UninstallService", () => {
   ) {
     return new UninstallService({
       shakaHome: testHome,
-      detectProviders: overrides.detectProviders ?? (async () => ({ claude: false, opencode: false })),
+      detectProviders:
+        overrides.detectProviders ?? (async () => ({ claude: false, opencode: false })),
     });
   }
 

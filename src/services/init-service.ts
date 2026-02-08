@@ -17,8 +17,7 @@ import {
 } from "./provider-detection";
 
 // Resolve defaults directory relative to this module
-const DEFAULT_DEFAULTS_PATH = new URL("../../defaults", import.meta.url)
-  .pathname;
+const DEFAULT_DEFAULTS_PATH = new URL("../../defaults", import.meta.url).pathname;
 const DEFAULT_REPO_ROOT = new URL("../..", import.meta.url).pathname;
 
 export interface InitServiceConfig {
@@ -58,10 +57,7 @@ export interface InitResult {
 }
 
 /** Default bun link runner using Bun.spawn. */
-async function defaultRunBunLink(
-  cwd: string,
-  args: string[]
-): Promise<Result<void, Error>> {
+async function defaultRunBunLink(cwd: string, args: string[]): Promise<Result<void, Error>> {
   try {
     const proc = Bun.spawn(["bun", "link", ...args], {
       cwd,
@@ -72,20 +68,12 @@ async function defaultRunBunLink(
     if (exitCode !== 0) {
       const stderr = await new Response(proc.stderr).text();
       return err(
-        new Error(
-          `bun link ${args.join(
-            " "
-          )} failed (exit ${exitCode}): ${stderr.trim()}`
-        )
+        new Error(`bun link ${args.join(" ")} failed (exit ${exitCode}): ${stderr.trim()}`),
       );
     }
     return ok(undefined);
   } catch (e) {
-    return err(
-      new Error(
-        `bun link failed: ${e instanceof Error ? e.message : String(e)}`
-      )
-    );
+    return err(new Error(`bun link failed: ${e instanceof Error ? e.message : String(e)}`));
   }
 }
 
@@ -94,10 +82,7 @@ export class InitService {
   private readonly defaultsPath: string;
   private readonly repoRoot: string;
   private readonly detectProviders: () => Promise<DetectedProviders>;
-  private readonly runBunLink: (
-    cwd: string,
-    args: string[]
-  ) => Promise<Result<void, Error>>;
+  private readonly runBunLink: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
 
   constructor(config: InitServiceConfig) {
     this.shakaHome = config.shakaHome;
@@ -125,10 +110,8 @@ export class InitService {
       } catch (e) {
         return err(
           new Error(
-            `Failed to create directory '${dir}': ${
-              e instanceof Error ? e.message : String(e)
-            }`
-          )
+            `Failed to create directory '${dir}': ${e instanceof Error ? e.message : String(e)}`,
+          ),
         );
       }
     }
@@ -165,8 +148,8 @@ export class InitService {
       if (exists && !isLink) {
         return err(
           new Error(
-            `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`
-          )
+            `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`,
+          ),
         );
       }
 
@@ -186,11 +169,7 @@ export class InitService {
       return ok(symlinks);
     } catch (e) {
       return err(
-        new Error(
-          `Failed to link system/: ${
-            e instanceof Error ? e.message : String(e)
-          }`
-        )
+        new Error(`Failed to link system/: ${e instanceof Error ? e.message : String(e)}`),
       );
     }
   }
@@ -202,9 +181,7 @@ export class InitService {
    * This means new templates added in future versions get deployed
    * to existing installations.
    */
-  async copyUserTemplates(
-    personalization?: Personalization
-  ): Promise<Result<string[], Error>> {
+  async copyUserTemplates(personalization?: Personalization): Promise<Result<string[], Error>> {
     const sourceDir = `${this.defaultsPath}/user`;
     const targetDir = `${this.shakaHome}/user`;
 
@@ -227,16 +204,12 @@ export class InitService {
         sourceDir,
         targetDir,
         eta,
-        templateData
+        templateData,
       );
       return ok(files);
     } catch (e) {
       return err(
-        new Error(
-          `Failed to copy user templates: ${
-            e instanceof Error ? e.message : String(e)
-          }`
-        )
+        new Error(`Failed to copy user templates: ${e instanceof Error ? e.message : String(e)}`),
       );
     }
   }
@@ -246,7 +219,7 @@ export class InitService {
     sourceDir: string,
     targetDir: string,
     eta: Eta,
-    templateData: Record<string, string>
+    templateData: Record<string, string>,
   ): Promise<string[]> {
     const files: string[] = [];
 
@@ -276,9 +249,7 @@ export class InitService {
    * When personalization is provided, merges names into the default config.
    * Never overwrites existing config.
    */
-  async copyDefaultConfig(
-    personalization?: Personalization
-  ): Promise<Result<string[], Error>> {
+  async copyDefaultConfig(personalization?: Personalization): Promise<Result<string[], Error>> {
     const files: string[] = [];
     const configPath = `${this.shakaHome}/config.json`;
 
@@ -287,9 +258,7 @@ export class InitService {
       const defaultConfig = Bun.file(defaultConfigPath);
 
       if (!(await defaultConfig.exists())) {
-        return err(
-          new Error(`Default config not found at ${defaultConfigPath}`)
-        );
+        return err(new Error(`Default config not found at ${defaultConfigPath}`));
       }
 
       if (personalization) {
@@ -353,11 +322,7 @@ export class InitService {
       return ok(undefined);
     } catch (e) {
       return err(
-        new Error(
-          `Failed to write version: ${
-            e instanceof Error ? e.message : String(e)
-          }`
-        )
+        new Error(`Failed to write version: ${e instanceof Error ? e.message : String(e)}`),
       );
     }
   }
@@ -367,7 +332,7 @@ export class InitService {
    */
   private resolveProviders(
     selected: ProviderName[] | undefined,
-    detected: DetectedProviders
+    detected: DetectedProviders,
   ): ProviderName[] {
     if (selected && selected.length > 0) {
       return selected.filter((p) => detected[p]);
@@ -388,11 +353,7 @@ export class InitService {
     const toInstall = this.resolveProviders(options.providers, detected);
 
     if (toInstall.length === 0) {
-      return err(
-        new Error(
-          "No AI providers detected. Install Claude Code or opencode first."
-        )
-      );
+      return err(new Error("No AI providers detected. Install Claude Code or opencode first."));
     }
 
     // 1. Create user-owned directories

@@ -190,9 +190,7 @@ console.log("logger");
       expect(bashEntry.hooks[0].command).toContain("security.ts");
 
       // No-matcher entry should have logger hook (catch-all)
-      const catchAllEntry = settings.hooks.PreToolUse.find(
-        (h: { matcher?: string }) => !h.matcher,
-      );
+      const catchAllEntry = settings.hooks.PreToolUse.find((h: { matcher?: string }) => !h.matcher);
       expect(catchAllEntry).toBeDefined();
       expect(catchAllEntry.hooks[0].command).toContain("logger.ts");
     });
@@ -298,7 +296,16 @@ export const MATCHER = ["Bash"] as const;
       expect(result.ok).toBe(true);
       expect(calls).toHaveLength(1);
       expect(calls[0]).toEqual([
-        "claude", "mcp", "add", "shaka", "-s", "user", "--", "shaka", "mcp", "serve",
+        "claude",
+        "mcp",
+        "add",
+        "shaka",
+        "-s",
+        "user",
+        "--",
+        "shaka",
+        "mcp",
+        "serve",
       ]);
     });
 
@@ -337,9 +344,7 @@ export const MATCHER = ["Bash"] as const;
 
       expect(result.ok).toBe(true);
       expect(calls).toHaveLength(1);
-      expect(calls[0]).toEqual([
-        "claude", "mcp", "remove", "shaka", "-s", "user",
-      ]);
+      expect(calls[0]).toEqual(["claude", "mcp", "remove", "shaka", "-s", "user"]);
     });
 
     test("succeeds even if server not found", async () => {

@@ -26,6 +26,6 @@
     "enabled": true
   },
   "files": {
-    "ignore": ["node_modules", "dist", ".opencode", ".claude", "experiments"]
+    "ignore": ["node_modules", "dist", ".opencode", ".claude", "experiments", ".docker-state"]
   }
 }
