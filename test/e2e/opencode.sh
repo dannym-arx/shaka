@@ -70,7 +70,7 @@ fi
 
 section "Security validator"
 
-PLUGIN="$(pwd)/.opencode/plugins/shaka.ts"
+PLUGIN="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/plugins/shaka.ts"
 
 if grep -q "security-validator" "$PLUGIN"; then
   pass "Plugin references security-validator in TOOL_HOOKS"
@@ -137,7 +137,7 @@ else
 fi
 
 # Add a non-shaka plugin to verify it survives uninstall
-OTHER_PLUGIN="$(pwd)/.opencode/plugins/other-tool.ts"
+OTHER_PLUGIN="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/plugins/other-tool.ts"
 cat > "$OTHER_PLUGIN" << 'PLUGIN_EOF'
 export const OtherPlugin = async () => ({ name: "other-tool" });
 PLUGIN_EOF

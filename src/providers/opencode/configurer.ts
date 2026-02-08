@@ -1,22 +1,35 @@
 /**
  * opencode provider configuration.
- * Creates in-process plugin in .opencode/plugins/.
+ * Creates in-process plugin in ~/.config/opencode/plugins/.
+ *
+ * opencode discovers plugins from two locations:
+ *   1. .opencode/plugins/ in the current working directory (project-local)
+ *   2. ~/.config/opencode/plugins/ (global)
+ *
+ * Shaka installs to the global path so the plugin works from any directory.
  *
  * Hooks are discovered from ${shakaHome}/system/hooks/*.ts
  * The generated plugin calls hooks via subprocess to maintain compatibility.
  */
 
 import { mkdir, unlink } from "node:fs/promises";
+import { homedir } from "node:os";
 import { type Result, err, ok } from "../../domain/result";
 import { type DiscoveredHook, discoverHooks } from "../hook-discovery";
 import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
 
+/** Resolve the global opencode config directory (XDG-compliant). */
+function defaultOpencodeConfigDir(): string {
+  const xdg = process.env.XDG_CONFIG_HOME;
+  return xdg ? `${xdg}/opencode` : `${homedir()}/.config/opencode`;
+}
+
 export class OpencodeProviderConfigurer implements ProviderConfigurer {
   readonly name = "opencode" as const;
-  private readonly projectRoot: string;
+  private readonly opencodeConfigDir: string;
 
-  constructor(options?: { projectRoot?: string }) {
-    this.projectRoot = options?.projectRoot ?? process.cwd();
+  constructor(options?: { opencodeConfigDir?: string }) {
+    this.opencodeConfigDir = options?.opencodeConfigDir ?? defaultOpencodeConfigDir();
   }
 
   async isInstalled(): Promise<boolean> {
@@ -29,7 +42,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 
   async installHooks(config: HookConfig): Promise<Result<void, Error>> {
     try {
-      const pluginsDir = `${this.projectRoot}/.opencode/plugins`;
+      const pluginsDir = `${this.opencodeConfigDir}/plugins`;
       await mkdir(pluginsDir, { recursive: true });
 
       // Discover hooks
@@ -73,7 +86,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 
   async uninstallHooks(): Promise<Result<void, Error>> {
     try {
-      const pluginPath = `${this.projectRoot}/.opencode/plugins/shaka.ts`;
+      const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
       const file = Bun.file(pluginPath);
 
       if (await file.exists()) {
@@ -89,7 +102,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
   async verifyHooks(): Promise<HookVerificationResult> {
     const issues: string[] = [];
 
-    const pluginPath = `${this.projectRoot}/.opencode/plugins/shaka.ts`;
+    const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
     const file = Bun.file(pluginPath);
 
     if (!(await file.exists())) {
