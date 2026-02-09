@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { ClaudeProviderConfigurer } from "../../../../src/providers/claude/configurer";
-import { discoverHooks, parseHookTrigger } from "../../../../src/providers/hook-discovery";
+import {
+  HOOK_EVENTS,
+  SHAKA_TO_CLAUDE_EVENT,
+  SHAKA_TO_OPENCODE_HOOK,
+  discoverHooks,
+  parseHookTrigger,
+} from "../../../../src/providers/hook-discovery";
 
 describe("ClaudeProviderConfigurer", () => {
   const testClaudeHome = "/tmp/shaka-test-claude";
@@ -81,6 +87,25 @@ console.log("test");
         (h: { matcher?: string }) => !h.matcher,
       );
       expect(shakaHooks.length).toBe(1);
+    });
+
+    test("registers SessionEnd hooks for session.end trigger", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("test");
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      expect(settings.hooks.SessionEnd).toBeDefined();
+      expect(settings.hooks.SessionEnd.length).toBeGreaterThan(0);
+      const shakaEntry = settings.hooks.SessionEnd.find((h: { matcher?: string }) => !h.matcher);
+      expect(shakaEntry).toBeDefined();
+      expect(shakaEntry.hooks[0].command).toContain("session-end.ts");
     });
 
     test("installs multiple hooks for different events", async () => {
@@ -382,6 +407,24 @@ console.log("test");
 
   afterEach(async () => {
     await rm(testShakaHome, { recursive: true, force: true });
+  });
+
+  describe("HOOK_EVENTS", () => {
+    test("includes session.end", () => {
+      expect(HOOK_EVENTS).toContain("session.end");
+    });
+  });
+
+  describe("SHAKA_TO_CLAUDE_EVENT", () => {
+    test("maps session.end to SessionEnd", () => {
+      expect(SHAKA_TO_CLAUDE_EVENT["session.end"]).toBe("SessionEnd");
+    });
+  });
+
+  describe("SHAKA_TO_OPENCODE_HOOK", () => {
+    test("maps session.end to null (special handling)", () => {
+      expect(SHAKA_TO_OPENCODE_HOOK["session.end"]).toBeNull();
+    });
   });
 
   describe("parseHookTrigger", () => {

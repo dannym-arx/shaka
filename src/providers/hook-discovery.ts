@@ -16,7 +16,13 @@ import { readdir } from "node:fs/promises";
  * Shaka's canonical hook event names.
  * These are provider-agnostic — conversion happens in provider configurers.
  */
-export const HOOK_EVENTS = ["session.start", "prompt.submit", "tool.before", "tool.after"] as const;
+export const HOOK_EVENTS = [
+  "session.start",
+  "session.end",
+  "prompt.submit",
+  "tool.before",
+  "tool.after",
+] as const;
 
 export type HookEvent = (typeof HOOK_EVENTS)[number];
 
@@ -108,6 +114,7 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
  */
 export const SHAKA_TO_CLAUDE_EVENT: Record<HookEvent, string> = {
   "session.start": "SessionStart",
+  "session.end": "SessionEnd",
   "prompt.submit": "UserPromptSubmit",
   "tool.before": "PreToolUse",
   "tool.after": "PostToolUse",
@@ -120,6 +127,7 @@ export const SHAKA_TO_CLAUDE_EVENT: Record<HookEvent, string> = {
  */
 export const SHAKA_TO_OPENCODE_HOOK: Record<HookEvent, string | null> = {
   "session.start": null, // No direct equivalent - handled at plugin load
+  "session.end": null, // No direct equivalent - handled via session.idle in catch-all event handler
   "prompt.submit": "experimental.chat.system.transform",
   "tool.before": "tool.execute.before",
   "tool.after": "tool.execute.after",
