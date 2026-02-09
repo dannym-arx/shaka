@@ -224,14 +224,6 @@ else
   pass "system/ symlink removed"
 fi
 
-# .shaka-version removed
-if [ -f "$SHAKA_HOME/.shaka-version" ]; then
-  fail ".shaka-version still exists after uninstall"
-  exit 1
-else
-  pass ".shaka-version removed"
-fi
-
 # config.json removed
 if [ -f "$SHAKA_HOME/config.json" ]; then
   fail "config.json still exists after uninstall"

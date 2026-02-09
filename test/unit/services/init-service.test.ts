@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { lstat, mkdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, readlink, rm, symlink } from "node:fs/promises";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
 import { InitService } from "../../../src/services/init-service";
@@ -245,7 +245,7 @@ describe("InitService", () => {
       }
 
       const content = await Bun.file(`${testHome}/config.json`).json();
-      expect(content.version).toBe("0.1.0");
+      expect(content.version).toBe("0.1.3");
     });
 
     test("creates config.json with personalized names", async () => {
@@ -265,7 +265,6 @@ describe("InitService", () => {
       const content = await Bun.file(`${testHome}/config.json`).json();
       expect(content.principal.name).toBe("Master Bruce");
       expect(content.assistant.name).toBe("Alfred");
-      expect(content.version).toBe("0.1.0");
     });
 
     test("does not overwrite existing config.json", async () => {
@@ -286,11 +285,14 @@ describe("InitService", () => {
       expect(content).toBe(existingContent);
     });
 
-    test("does not overwrite existing config.json even with personalization", async () => {
+    test("updates names in existing config.json when personalization provided", async () => {
       const service = createService();
       await service.createDirectories();
 
-      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.0","assistant":{"name":"Old"}}');
+      await Bun.write(
+        `${testHome}/config.json`,
+        '{"version":"0.1.0","principal":{"name":"Old"},"assistant":{"name":"Old"}}',
+      );
 
       const result = await service.copyDefaultConfig({
         principalName: "New",
@@ -299,11 +301,13 @@ describe("InitService", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
+        // Not listed as created (file already existed)
         expect(result.value).not.toContain(`${testHome}/config.json`);
       }
 
       const content = await Bun.file(`${testHome}/config.json`).json();
-      expect(content.assistant.name).toBe("Old");
+      expect(content.principal.name).toBe("New");
+      expect(content.assistant.name).toBe("New");
     });
   });
 
@@ -330,37 +334,6 @@ describe("InitService", () => {
     });
   });
 
-  describe("version tracking", () => {
-    test("readInstalledVersion returns null when no version file", async () => {
-      const service = createService();
-      await service.createDirectories();
-
-      const version = await service.readInstalledVersion();
-      expect(version).toBeNull();
-    });
-
-    test("writeInstalledVersion creates .shaka-version file", async () => {
-      const service = createService();
-      await service.createDirectories();
-
-      const result = await service.writeInstalledVersion();
-      expect(result.ok).toBe(true);
-
-      const version = await service.readInstalledVersion();
-      expect(version).toBe("0.1.0");
-    });
-
-    test("readInstalledVersion reads existing version", async () => {
-      const service = createService();
-      await service.createDirectories();
-
-      await writeFile(`${testHome}/.shaka-version`, "0.0.1\n");
-
-      const version = await service.readInstalledVersion();
-      expect(version).toBe("0.0.1");
-    });
-  });
-
   describe("init", () => {
     test("returns error when no providers detected", async () => {
       const service = createService({
@@ -384,7 +357,7 @@ describe("InitService", () => {
       if (result.ok) {
         expect(result.value.providers.claude.detected).toBe(true);
         expect(result.value.providers.claude.installed).toBe(true);
-        expect(result.value.currentVersion).toBe("0.1.0");
+        expect(result.value.currentVersion).toBe("0.1.3");
         expect(result.value.directories.length).toBeGreaterThan(0);
         expect(result.value.files.length).toBeGreaterThan(0);
       }
@@ -392,10 +365,6 @@ describe("InitService", () => {
       // Verify system symlink exists
       const stats = await lstat(`${testHome}/system`);
       expect(stats.isSymbolicLink()).toBe(true);
-
-      // Verify version was written
-      const version = await Bun.file(`${testHome}/.shaka-version`).text();
-      expect(version.trim()).toBe("0.1.0");
 
       // Verify user templates were copied
       expect(await Bun.file(`${testHome}/user/user.md`).exists()).toBe(true);
@@ -412,7 +381,7 @@ describe("InitService", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.currentVersion).toBe("0.1.0");
+        expect(result.value.currentVersion).toBe("0.1.3");
       }
     });
 
@@ -481,7 +450,7 @@ describe("InitService", () => {
 
       // User customizes a file
       await Bun.write(`${testHome}/user/user.md`, "# Custom content");
-      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.0","custom":true}');
+      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.3","custom":true}');
 
       // Re-init
       const result = await service.init();
@@ -542,7 +511,7 @@ describe("InitService", () => {
       expect(config.assistant.name).toBe("Shaka");
     });
 
-    test("re-init with personalization does not overwrite existing files", async () => {
+    test("re-init with personalization updates names but preserves user files", async () => {
       const service = createService();
 
       // First init with personalization
@@ -557,17 +526,19 @@ describe("InitService", () => {
       const initialConfig = await Bun.file(`${testHome}/config.json`).json();
       expect(initialConfig.principal.name).toBe("Master Bruce");
 
-      // Re-init with different names — should NOT overwrite
+      // Re-init with different names — config names should update
       const result = await service.init({
         personalization: { principalName: "Other", assistantName: "Bot" },
       });
 
       expect(result.ok).toBe(true);
 
-      // Files preserved from first init
+      // Config names updated
       const config = await Bun.file(`${testHome}/config.json`).json();
-      expect(config.principal.name).toBe("Master Bruce");
+      expect(config.principal.name).toBe("Other");
+      expect(config.assistant.name).toBe("Bot");
 
+      // User templates preserved from first init (not overwritten)
       const userContent = await Bun.file(`${testHome}/user/user.md`).text();
       expect(userContent).toContain("**Name:** Master Bruce");
     });

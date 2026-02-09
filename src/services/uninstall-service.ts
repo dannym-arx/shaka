@@ -4,7 +4,7 @@
  * Reverses what `shaka init` does:
  * - Removes provider hooks (Claude settings.json entries, opencode plugin)
  * - Removes system/ symlink
- * - Removes .shaka-version and config.json
+ * - Removes config.json
  * - Optionally removes user-owned directories (user/, customizations/, memory/)
  */
 
@@ -92,11 +92,11 @@ export class UninstallService {
   }
 
   /**
-   * Remove framework-owned files (.shaka-version, config.json).
+   * Remove framework-owned files (config.json).
    */
   async removeFrameworkFiles(): Promise<string[]> {
     const removed: string[] = [];
-    const files = [`${this.shakaHome}/.shaka-version`, `${this.shakaHome}/config.json`];
+    const files = [`${this.shakaHome}/config.json`];
 
     for (const filePath of files) {
       try {

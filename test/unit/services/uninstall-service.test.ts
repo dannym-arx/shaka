@@ -89,21 +89,18 @@ describe("UninstallService", () => {
   });
 
   describe("removeFrameworkFiles", () => {
-    test("removes .shaka-version and config.json", async () => {
+    test("removes config.json", async () => {
       await setupInitializedHome();
       const service = createService();
 
-      // Verify files exist before
-      expect(await Bun.file(`${testHome}/.shaka-version`).exists()).toBe(true);
+      // Verify file exists before
       expect(await Bun.file(`${testHome}/config.json`).exists()).toBe(true);
 
       const removed = await service.removeFrameworkFiles();
 
-      expect(removed).toContain(`${testHome}/.shaka-version`);
       expect(removed).toContain(`${testHome}/config.json`);
 
-      // Verify files are gone
-      expect(await Bun.file(`${testHome}/.shaka-version`).exists()).toBe(false);
+      // Verify file is gone
       expect(await Bun.file(`${testHome}/config.json`).exists()).toBe(false);
     });
 
@@ -173,7 +170,6 @@ describe("UninstallService", () => {
       if (result.ok) {
         // Framework items removed
         expect(result.value.removed).toContain(`${testHome}/system`);
-        expect(result.value.removed).toContain(`${testHome}/.shaka-version`);
         expect(result.value.removed).toContain(`${testHome}/config.json`);
 
         // User dirs still exist

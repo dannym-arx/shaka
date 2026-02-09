@@ -11,7 +11,13 @@
 import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { loadConfig } from "../domain/config";
-import { findLatestTag, getCurrentVersion, isMajorUpgrade, parseSemver } from "../domain/version";
+import {
+  compareSemver,
+  findLatestTag,
+  getCurrentVersion,
+  isMajorUpgrade,
+  parseSemver,
+} from "../domain/version";
 
 interface UpdateInfo {
   localVersion: string;
@@ -84,10 +90,13 @@ async function confirmMajorUpgrade(info: UpdateInfo): Promise<boolean> {
 }
 
 async function checkoutAndInit(repoRoot: string, tag: string): Promise<boolean> {
-  console.log(`Checking out ${tag}...`);
-  const checkoutResult = await run(["git", "checkout", tag], repoRoot);
-  if (!checkoutResult.ok) {
-    console.error("ERROR: git checkout failed. Stash or commit local changes first.");
+  console.log(`Updating to ${tag}...`);
+  const mergeResult = await run(["git", "merge", "--ff-only", tag], repoRoot);
+  if (!mergeResult.ok) {
+    console.error(
+      "ERROR: Fast-forward to tag failed. You may have local commits ahead of the tag.",
+    );
+    console.error("       Stash or commit your changes, then retry.");
     return false;
   }
 
@@ -110,7 +119,9 @@ async function checkoutAndInit(repoRoot: string, tag: string): Promise<boolean> 
   // No providers enabled — config exists but is stale or from before provider tracking
   if (!config?.providers.claude.enabled && !config?.providers.opencode.enabled) {
     console.log("⚠️  No providers enabled in config.json.");
-    console.log("   Run `shaka init` to select providers, or `shaka doctor --fix` to auto-detect.\n");
+    console.log(
+      "   Run `shaka init` to select providers, or `shaka doctor --fix` to auto-detect.\n",
+    );
     return false;
   }
 
@@ -139,7 +150,7 @@ export function createUpdateCommand(): Command {
         process.exit(1);
       }
 
-      if (info.localVersion === info.latestVersion) {
+      if (compareSemver(info.localVersion, info.latestVersion) >= 0) {
         console.log(`Already up to date (v${info.localVersion}).`);
         return;
       }

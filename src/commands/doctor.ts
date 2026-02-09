@@ -119,6 +119,36 @@ async function fixConfigAlignment(
   console.log("  ✓ config.json updated");
 }
 
+async function checkProviders(config: ShakaConfig | null): Promise<boolean> {
+  let hasIssues = false;
+  const providers = getAllProviders();
+
+  for (const provider of providers) {
+    const installed = await provider.isInstalled();
+    const hookStatus = await provider.verifyHooks();
+    const enabled = config?.providers[provider.name].enabled ?? false;
+    const providerHasIssues = logProviderStatus(provider, installed, hookStatus, enabled);
+    hasIssues = hasIssues || providerHasIssues;
+  }
+
+  return hasIssues;
+}
+
+async function recheckAfterFix(shakaHome: string): Promise<boolean> {
+  const config = await loadConfig(shakaHome);
+  let hasIssues = await checkShakaHome(shakaHome);
+  const providers = getAllProviders();
+
+  for (const provider of providers) {
+    const installed = await provider.isInstalled();
+    const hookStatus = await provider.verifyHooks();
+    const enabled = config?.providers[provider.name].enabled ?? false;
+    if (enabled && installed && hookStatus.issues.length > 0) hasIssues = true;
+  }
+
+  return hasIssues;
+}
+
 function printSummary(hasIssues: boolean): void {
   console.log(`\n${"─".repeat(40)}`);
   if (hasIssues) {
@@ -145,36 +175,19 @@ export function createDoctorCommand(): Command {
 
       let hasIssues = await checkShakaHome(shakaHome);
 
-      // Load config early — needed for provider status and alignment checks
-      let config = await loadConfig(shakaHome);
+      const config = await loadConfig(shakaHome);
 
       console.log("\nProvider status:");
-      const providers = getAllProviders();
+      const providerIssues = await checkProviders(config);
+      hasIssues = hasIssues || providerIssues;
 
-      for (const provider of providers) {
-        const installed = await provider.isInstalled();
-        const hookStatus = await provider.verifyHooks();
-        const enabled = config?.providers[provider.name].enabled ?? false;
-        const providerHasIssues = logProviderStatus(provider, installed, hookStatus, enabled);
-        hasIssues = hasIssues || providerHasIssues;
-      }
-
-      // Check config-vs-reality alignment
       const mismatches = await checkProviderConfigAlignment(config);
       const alignmentIssues = logConfigAlignment(mismatches);
       hasIssues = hasIssues || alignmentIssues;
 
       if (options.fix && mismatches.length > 0) {
         await fixConfigAlignment(shakaHome, mismatches);
-        // Re-read config after fix and re-evaluate
-        config = await loadConfig(shakaHome);
-        hasIssues = await checkShakaHome(shakaHome);
-        for (const provider of providers) {
-          const installed = await provider.isInstalled();
-          const hookStatus = await provider.verifyHooks();
-          const enabled = config?.providers[provider.name].enabled ?? false;
-          if (enabled && installed && hookStatus.issues.length > 0) hasIssues = true;
-        }
+        hasIssues = await recheckAfterFix(shakaHome);
       }
 
       printSummary(hasIssues);

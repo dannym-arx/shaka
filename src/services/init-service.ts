@@ -246,14 +246,14 @@ export class InitService {
 
   /**
    * Copy default config.json if it doesn't exist.
-   * When personalization is provided, merges names into the default config.
-   * Never overwrites existing config.
+   * When personalization is provided, updates names in the config (existing or new).
    */
   async copyDefaultConfig(personalization?: Personalization): Promise<Result<string[], Error>> {
     const files: string[] = [];
     const configPath = `${this.shakaHome}/config.json`;
+    const configFile = Bun.file(configPath);
 
-    if (!(await Bun.file(configPath).exists())) {
+    if (!(await configFile.exists())) {
       const defaultConfigPath = `${this.defaultsPath}/config.json`;
       const defaultConfig = Bun.file(defaultConfigPath);
 
@@ -272,6 +272,12 @@ export class InitService {
       }
 
       files.push(configPath);
+    } else if (personalization) {
+      // Config exists — update names if personalization provided
+      const config = await configFile.json();
+      config.principal.name = personalization.principalName;
+      config.assistant.name = personalization.assistantName;
+      await Bun.write(configPath, `${JSON.stringify(config, null, 2)}\n`);
     }
 
     return ok(files);
@@ -290,13 +296,23 @@ export class InitService {
     try {
       const config = await file.json();
       if (config.providers) {
-        config.providers.claude = { ...config.providers.claude, enabled: providers.includes("claude") };
-        config.providers.opencode = { ...config.providers.opencode, enabled: providers.includes("opencode") };
+        config.providers.claude = {
+          ...config.providers.claude,
+          enabled: providers.includes("claude"),
+        };
+        config.providers.opencode = {
+          ...config.providers.opencode,
+          enabled: providers.includes("opencode"),
+        };
         await Bun.write(configPath, `${JSON.stringify(config, null, 2)}\n`);
       }
       return ok(undefined);
     } catch (e) {
-      return err(new Error(`Failed to update config providers: ${e instanceof Error ? e.message : String(e)}`));
+      return err(
+        new Error(
+          `Failed to update config providers: ${e instanceof Error ? e.message : String(e)}`,
+        ),
+      );
     }
   }
 
@@ -316,38 +332,6 @@ export class InitService {
     if (!linkResult.ok) return linkResult;
 
     return ok(undefined);
-  }
-
-  /**
-   * Read the installed version from .shaka-version file.
-   * Returns null if file doesn't exist or can't be read.
-   */
-  async readInstalledVersion(): Promise<string | null> {
-    const versionPath = `${this.shakaHome}/.shaka-version`;
-    const file = Bun.file(versionPath);
-
-    if (!(await file.exists())) return null;
-
-    try {
-      return (await file.text()).trim();
-    } catch {
-      return null;
-    }
-  }
-
-  /**
-   * Write the current version to .shaka-version file.
-   */
-  async writeInstalledVersion(): Promise<Result<void, Error>> {
-    try {
-      const version = getCurrentVersion();
-      await Bun.write(`${this.shakaHome}/.shaka-version`, `${version}\n`);
-      return ok(undefined);
-    } catch (e) {
-      return err(
-        new Error(`Failed to write version: ${e instanceof Error ? e.message : String(e)}`),
-      );
-    }
   }
 
   /**
@@ -403,9 +387,6 @@ export class InitService {
 
     // 6. Persist provider selection to config.json
     await this.updateConfigProviders(toInstall);
-
-    // 7. Write installed version (best-effort — non-critical)
-    await this.writeInstalledVersion();
 
     const result: InitResult = {
       providers: {

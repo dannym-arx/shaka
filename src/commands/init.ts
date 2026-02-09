@@ -7,7 +7,7 @@
 
 import { createInterface } from "node:readline";
 import { Command } from "commander";
-import { resolveShakaHome } from "../domain/config";
+import { loadConfig, resolveShakaHome } from "../domain/config";
 import { findNewerLocalTag, getGitRef } from "../domain/version";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
@@ -126,15 +126,19 @@ async function promptProviderSelection(detected: DetectedProviders): Promise<Pro
 
 /**
  * Prompt user for their name and assistant name.
- * Shows defaults — pressing Enter accepts them.
+ * Uses existing config values as defaults when available, falls back to hardcoded defaults.
  */
-async function promptPersonalization(): Promise<Personalization> {
-  const principalName = await prompt("Your name [Chief]: ");
-  const assistantName = await prompt("Assistant name [Shaka]: ");
+async function promptPersonalization(shakaHome: string): Promise<Personalization> {
+  const existing = await loadConfig(shakaHome);
+  const defaultPrincipal = existing?.principal?.name ?? "Chief";
+  const defaultAssistant = existing?.assistant?.name ?? "Shaka";
+
+  const principalName = await prompt(`Your name [${defaultPrincipal}]: `);
+  const assistantName = await prompt(`Assistant name [${defaultAssistant}]: `);
 
   return {
-    principalName: principalName || "Chief",
-    assistantName: assistantName || "Shaka",
+    principalName: principalName || defaultPrincipal,
+    assistantName: assistantName || defaultAssistant,
   };
 }
 
@@ -230,7 +234,7 @@ export function createInitCommand(): Command {
       let personalization: Personalization | undefined;
       if (!options.defaults) {
         console.log();
-        personalization = await promptPersonalization();
+        personalization = await promptPersonalization(shakaHome);
       }
 
       console.log();
