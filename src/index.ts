@@ -82,6 +82,8 @@ export {
   selectRecentSummaries,
 } from "./memory/storage";
 
+export { type SearchResult, searchMemory } from "./memory/search";
+
 export {
   type SemVer,
   type GitRef,
@@ -118,6 +120,7 @@ export {
 import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
 import { createMcpCommand } from "./commands/mcp";
+import { createMemoryCommand } from "./commands/memory";
 import { createUninstallCommand } from "./commands/uninstall";
 import { createUpdateCommand } from "./commands/update";
 import { getCurrentVersion } from "./domain/version";
@@ -133,6 +136,7 @@ if (import.meta.main) {
   program.addCommand(createUninstallCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createMcpCommand());
+  program.addCommand(createMemoryCommand());
 
   program.parse(process.argv);
 }
