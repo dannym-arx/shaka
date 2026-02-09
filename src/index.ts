@@ -61,6 +61,13 @@ export {
 export { type HookEvent, HOOK_EVENTS } from "./providers/hook-discovery";
 
 export {
+  type NormalizedMessage,
+  parseClaudeCodeTranscript,
+  parseOpencodeTranscript,
+  truncateTranscript,
+} from "./memory/transcript";
+
+export {
   type SemVer,
   type GitRef,
   parseSemver,
