@@ -154,6 +154,8 @@ When asked to help with ANY phase, you bring ISC expertise:
 
 - ISC becomes ISVC (Verification Criteria)
 - Test each criterion with YES/NO evidence
+- Derive 1-3 mechanical self-checks per criterion (validation contracts)
+- Include these checks in agent prompts so agents self-validate before reporting done
 - Test anti-criteria (confirm NOT done)
 - Document: satisfied, partial, failed
 

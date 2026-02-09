@@ -45,10 +45,13 @@ Short prompts can demand FULL depth. The word "just" does not reduce depth.
 - What they asked
 - What they implied
 - What they DON'T want
+- What they implied they DON'T want
+- Gotchas: likely failure modes or edge cases
 
 🎯 **ISC (Ideal State Criteria):**
 1. [8-word criterion]
 2. [8-word criterion]
+Track using available task management tools.
 
 ━━━ 🧠 THINK ━━━ 2/7
 
@@ -56,6 +59,8 @@ Short prompts can demand FULL depth. The word "just" does not reduce depth.
 │ Council:         [INCLUDE/EXCLUDE] — [reason]
 │ RedTeam:         [INCLUDE/EXCLUDE] — [reason]
 │ FirstPrinciples: [INCLUDE/EXCLUDE] — [reason]
+│ Science:         [INCLUDE/EXCLUDE] — [reason]
+│ BeCreative:      [INCLUDE/EXCLUDE] — [reason]
 
 🎯 **Capability Selection:**
 │ Primary:   [capability] — [why, tied to ISC]
@@ -79,7 +84,15 @@ Short prompts can demand FULL depth. The word "just" does not reduce depth.
 
 ━━━ ✅ VERIFY ━━━ 6/7
 
-[Check each ISC criterion with evidence]
+**Ownership Check:** Before verifying criteria, confirm you solved the right problem.
+Is this what was actually requested, or a different problem done well?
+
+**Evidence:** For each ISC criterion, state verdict + evidence:
+- "ISC 1: PASS — tests pass (ran `bun test`, 212 passing)"
+- "ISC 2: FAIL — expected 200, got 404 on /api/users"
+
+**On failure:** Retry up to 3 times: DIAGNOSE → FIX → RE-VERIFY.
+Do not claim completion with failing criteria.
 
 ━━━ 📚 LEARN ━━━ 7/7
 
@@ -131,6 +144,8 @@ Thinking tools are **opt-OUT, not opt-IN.** For every FULL depth request, evalua
 | **Council**         | Multi-agent debate (3-7 perspectives) | Multiple valid approaches exist. Design decisions with no clear winner.              |
 | **RedTeam**         | Adversarial analysis                  | Claims need stress-testing. Security implications. Could fail non-obviously.         |
 | **FirstPrinciples** | Deconstruct → Challenge → Reconstruct | Problem may be a symptom. Assumptions need examining. "Why" matters more than "how." |
+| **Science**         | Hypothesis → Test → Analyze cycles    | Iterative problem. Experimentation needed. Multiple hypotheses to test.              |
+| **BeCreative**      | Extended thinking, diverse options    | Need creative divergence. Novel solution space. Avoiding obvious answers.            |
 
 ### Valid Exclusion Reasons
 
@@ -180,6 +195,15 @@ In the THINK phase, select capabilities to execute the work. Make selection **vi
 | **Fan-out**    | → [A, B, C]            | Multiple perspectives needed        |
 | **Gate**       | A → check → B or retry | Quality gate before progression     |
 | **Specialist** | Single A               | One domain, deep expertise          |
+| **Tournament** | [A, B, C] → best       | Competing approaches, pick winner   |
+| **Pair**       | A + Validator          | High-stakes: security, integrity    |
+
+### Agent Prompt Design
+
+When delegating to agents, scope their context and build in self-validation:
+
+- **Validation contracts:** Derive 1-3 mechanical checks from each ISC criterion. Include these in the agent's prompt so it self-validates before reporting done.
+- **ISC-scoped context:** Give agents their assigned criterion and supporting context only, not the full OBSERVE dump. Focused context produces focused work.
 
 ---
 
@@ -195,6 +219,15 @@ Before acting, define what success looks like. ISC enables verification.
 | **State, not action** | Describes outcome   | "Tests pass" NOT "Run tests"             |
 | **Binary testable**   | Yes/No in 2 seconds | Can verify immediately                   |
 | **Granular**          | One concern each    | Split compound criteria                  |
+
+### Dependency Ordering
+
+Order ISC criteria by dependency. Execute in waves:
+
+1. **Independent criteria first** — no prerequisites
+2. **Dependent criteria after** — rely on earlier results
+
+This prevents wasted work on criteria whose prerequisites haven't been met.
 
 ### Good Examples
 
@@ -227,6 +260,9 @@ Before acting, define what success looks like. ISC enables verification.
 | No Thinking Tools Assessment          | Tools skipped without justification             |
 | No Capability Selection in THINK      | Capabilities chosen implicitly, not justified   |
 | Accepting hook hints as final         | Hook sees raw prompt only; OBSERVE adds context |
+| Claiming "done" with failing ISC      | Retry loop exists for a reason                  |
+| Skipping ownership check in VERIFY    | May solve the wrong problem well                |
+| Agents receive full OBSERVE dump      | Scope agent context to assigned ISC             |
 
 ---
 
@@ -297,7 +333,7 @@ Classifies every prompt to enforce the Algorithm:
 
 - Uses AI inference to determine depth (FULL/ITERATION/MINIMAL)
 - Suggests capabilities (research, engineer, architect, analyst, qa)
-- Hints thinking tools (council, redteam, firstprinciples)
+- Hints thinking tools (council, redteam, firstprinciples, science, becreative)
 
 This is **Pass 1** of two-pass capability selection. The THINK phase is **Pass 2** where you validate against ISC.
 
@@ -307,17 +343,10 @@ This is **Pass 1** of two-pass capability selection. The THINK phase is **Pass 2
 
 ## Agents
 
-The `Analyst` agent specializes in ISC extraction and evolution:
+The `Analyst` agent (Algorithm) specializes in ISC extraction and evolution.
+Delegate ISC work to it when criteria need decomposition or refinement.
 
-```text
-Task({
-  subagent_type: "Algorithm",
-  prompt: "Extract ISC from this request: ...",
-  description: "ISC extraction"
-})
-```
-
-Copy agent definitions from `defaults/agents/` to `~/.claude/agents/` during setup.
+Agent definitions live in `agents/` and are discovered dynamically.
 
 ---
 
