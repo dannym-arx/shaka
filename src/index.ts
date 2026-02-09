@@ -45,9 +45,17 @@ export {
   type SessionStartEvent,
   type SessionStartEventInput,
   type SessionStartSource,
+  type SessionEndEvent,
+  type SessionEndEventInput,
+  type ToolAfterEvent,
+  type ToolAfterEventInput,
   type HandlerResult,
   createSessionStartEvent,
   isSessionStartEvent,
+  createSessionEndEvent,
+  isSessionEndEvent,
+  createToolAfterEvent,
+  isToolAfterEvent,
 } from "./domain/events";
 
 export { type HookEvent, HOOK_EVENTS } from "./providers/hook-discovery";
