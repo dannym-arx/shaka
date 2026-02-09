@@ -10,6 +10,7 @@
 
 import { createInterface } from "node:readline";
 import { Command } from "commander";
+import { loadConfig } from "../domain/config";
 import { findLatestTag, getCurrentVersion, isMajorUpgrade, parseSemver } from "../domain/version";
 
 interface UpdateInfo {
@@ -98,9 +99,24 @@ async function checkoutAndInit(repoRoot: string, tag: string): Promise<boolean> 
   }
 
   console.log("Re-initializing...\n");
+
+  // Read config to determine which providers the user originally selected
+  const config = await loadConfig();
+  const args = ["--defaults"]; // Skip name prompts — names are already in config.json
+
+  if (config?.providers.claude.enabled) args.push("--claude");
+  if (config?.providers.opencode.enabled) args.push("--opencode");
+
+  // No providers enabled — config exists but is stale or from before provider tracking
+  if (!config?.providers.claude.enabled && !config?.providers.opencode.enabled) {
+    console.log("⚠️  No providers enabled in config.json.");
+    console.log("   Run `shaka init` to select providers, or `shaka doctor --fix` to auto-detect.\n");
+    return false;
+  }
+
   const { createInitCommand } = await import("./init");
   const initCmd = createInitCommand();
-  await initCmd.parseAsync(["node", "shaka", "init", "--all"], { from: "user" });
+  await initCmd.parseAsync(args, { from: "user" });
   return true;
 }
 

@@ -278,6 +278,29 @@ export class InitService {
   }
 
   /**
+   * Update provider enabled flags in config.json.
+   * Persists the user's provider selection so `shaka update` can re-use it.
+   */
+  async updateConfigProviders(providers: ProviderName[]): Promise<Result<void, Error>> {
+    const configPath = `${this.shakaHome}/config.json`;
+    const file = Bun.file(configPath);
+
+    if (!(await file.exists())) return ok(undefined);
+
+    try {
+      const config = await file.json();
+      if (config.providers) {
+        config.providers.claude = { ...config.providers.claude, enabled: providers.includes("claude") };
+        config.providers.opencode = { ...config.providers.opencode, enabled: providers.includes("opencode") };
+        await Bun.write(configPath, `${JSON.stringify(config, null, 2)}\n`);
+      }
+      return ok(undefined);
+    } catch (e) {
+      return err(new Error(`Failed to update config providers: ${e instanceof Error ? e.message : String(e)}`));
+    }
+  }
+
+  /**
    * Link the shaka library so hooks can `import from "shaka"`.
    *
    * Step 1: `bun link` from repo root — registers package globally
@@ -378,7 +401,10 @@ export class InitService {
     const configFiles = await this.copyDefaultConfig(options.personalization);
     if (!configFiles.ok) return configFiles;
 
-    // 6. Write installed version (best-effort — non-critical)
+    // 6. Persist provider selection to config.json
+    await this.updateConfigProviders(toInstall);
+
+    // 7. Write installed version (best-effort — non-critical)
     await this.writeInstalledVersion();
 
     const result: InitResult = {
