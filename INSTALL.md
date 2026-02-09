@@ -89,7 +89,7 @@ Edit `~/.config/shaka/config.json` to customize:
 
 ```json
 {
-  "version": "0.1.0",
+  "version": "0.1.3",
   "reasoning": {
     "enabled": true
   },
