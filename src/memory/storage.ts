@@ -1,0 +1,163 @@
+/**
+ * Summary file storage: write, list, load, and select session summaries.
+ *
+ * Files are stored as markdown with YAML frontmatter in memory/sessions/.
+ * Filename format: YYYY-MM-DD-{slug}-{hash8}.md
+ * hash8 = first 8 chars of SHA-256(sessionId) for provider-agnostic uniqueness.
+ */
+
+import { mkdir, readdir } from "node:fs/promises";
+import { stringify as stringifyYaml } from "yaml";
+import { type SessionSummary, parseSummaryOutput } from "./summarize";
+
+export interface SummaryIndex {
+  readonly filePath: string;
+  readonly title: string;
+  readonly date: string;
+  readonly cwd: string;
+  readonly tags: string[];
+  readonly provider: "claude" | "opencode";
+  readonly sessionId: string;
+}
+
+/**
+ * Write a session summary to disk as markdown with YAML frontmatter.
+ *
+ * Creates memory/sessions/ if it doesn't exist.
+ * Returns the written file path.
+ */
+export async function writeSummary(memoryDir: string, summary: SessionSummary): Promise<string> {
+  const sessionsDir = `${memoryDir}/sessions`;
+  await mkdir(sessionsDir, { recursive: true });
+
+  const slug = slugify(summary.title);
+  const sessionHash = hashSessionId(summary.metadata.sessionId);
+  const filename = `${summary.metadata.date}-${slug}-${sessionHash}.md`;
+  const filePath = `${sessionsDir}/${filename}`;
+
+  const content = serializeSummary(summary);
+  await Bun.write(filePath, content);
+
+  return filePath;
+}
+
+/**
+ * List all session summaries in memory/sessions/, sorted by date (most recent first).
+ *
+ * Parses YAML frontmatter from each file for index data.
+ * Returns empty array if the directory doesn't exist.
+ */
+export async function listSummaries(memoryDir: string): Promise<SummaryIndex[]> {
+  const sessionsDir = `${memoryDir}/sessions`;
+
+  let entries: string[];
+  try {
+    entries = await readdir(sessionsDir);
+  } catch {
+    return [];
+  }
+
+  const indices: SummaryIndex[] = [];
+
+  for (const entry of entries) {
+    if (!entry.endsWith(".md")) continue;
+
+    const filePath = `${sessionsDir}/${entry}`;
+    const summary = await loadSummary(filePath);
+    if (!summary) continue;
+
+    indices.push(summaryToIndex(filePath, summary));
+  }
+
+  indices.sort((a, b) => b.date.localeCompare(a.date));
+  return indices;
+}
+
+/**
+ * Load and parse a single summary file.
+ * Returns null if the file doesn't exist or is unparseable.
+ */
+export async function loadSummary(filePath: string): Promise<SessionSummary | null> {
+  const file = Bun.file(filePath);
+  if (!(await file.exists())) return null;
+
+  try {
+    const content = await file.text();
+    return parseSummaryOutput(content);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Select the most relevant recent summaries for context loading.
+ *
+ * Prefers summaries matching the current working directory.
+ * Fills remaining slots with most recent from other directories.
+ * Returns up to `limit` summaries (default 3).
+ */
+export function selectRecentSummaries(
+  summaries: SummaryIndex[],
+  cwd: string,
+  limit = 3,
+): SummaryIndex[] {
+  if (summaries.length === 0) return [];
+
+  const cwdMatches = summaries.filter((s) => s.cwd === cwd);
+  const others = summaries.filter((s) => s.cwd !== cwd);
+
+  const selected = cwdMatches.slice(0, limit);
+
+  if (selected.length < limit) {
+    const remaining = limit - selected.length;
+    selected.push(...others.slice(0, remaining));
+  }
+
+  return selected;
+}
+
+// --- Helpers ---
+
+/**
+ * Hash a session ID to 8 hex chars for filename uniqueness.
+ * Uses SHA-256 so the output is provider-agnostic — works regardless of
+ * whether the input is a UUID (Claude) or ses_-prefixed ID (opencode).
+ */
+function hashSessionId(sessionId: string): string {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(sessionId);
+  return hasher.digest("hex").slice(0, 8);
+}
+
+function slugify(title: string): string {
+  return title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 40)
+    .replace(/-+$/, "");
+}
+
+function serializeSummary(summary: SessionSummary): string {
+  const frontmatter = stringifyYaml({
+    date: summary.metadata.date,
+    cwd: summary.metadata.cwd,
+    tags: summary.tags,
+    provider: summary.metadata.provider,
+    session_id: summary.metadata.sessionId,
+  }).trim();
+
+  return `---\n${frontmatter}\n---\n\n# ${summary.title}\n\n${summary.body}\n`;
+}
+
+function summaryToIndex(filePath: string, summary: SessionSummary): SummaryIndex {
+  return {
+    filePath,
+    title: summary.title,
+    date: summary.metadata.date,
+    cwd: summary.metadata.cwd,
+    tags: summary.tags,
+    provider: summary.metadata.provider,
+    sessionId: summary.metadata.sessionId,
+  };
+}

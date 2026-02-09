@@ -75,6 +75,14 @@ export {
 } from "./memory/summarize";
 
 export {
+  type SummaryIndex,
+  writeSummary,
+  listSummaries,
+  loadSummary,
+  selectRecentSummaries,
+} from "./memory/storage";
+
+export {
   type SemVer,
   type GitRef,
   parseSemver,
