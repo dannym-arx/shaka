@@ -1,20 +1,27 @@
 #!/usr/bin/env bun
 /**
  * SessionStart hook for Claude Code
- * Loads system context and user files, outputs additionalContext for the session.
+ * Loads system context, user files, and recent session summaries.
+ * Outputs additionalContext for the session.
  */
 
 import {
   getAssistantName,
   getPrincipalName,
   isSubagent,
+  listSummaries,
   loadShakaFile,
+  loadSummary,
   resolveShakaHome,
+  selectRecentSummaries,
 } from "shaka";
 
 /** Hook trigger events - Shaka canonical names (provider configurers handle conversion) */
 export const TRIGGER = ["session.start"] as const;
-export const HOOK_VERSION = "0.4.0";
+export const HOOK_VERSION = "0.5.0";
+
+/** Max total characters for the memory section (~5KB) */
+const MAX_MEMORY_CHARS = 5000;
 
 /**
  * Load all markdown files from user/ directory.
@@ -39,6 +46,47 @@ async function loadUserFiles(shakaHome: string): Promise<string[]> {
   return contents;
 }
 
+/**
+ * Load recent session summaries for context.
+ * Returns a formatted markdown section, or empty string if none available.
+ */
+async function loadRecentSessions(shakaHome: string): Promise<string> {
+  const memoryDir = `${shakaHome}/memory`;
+  const cwd = process.cwd();
+
+  try {
+    const allSummaries = await listSummaries(memoryDir);
+    if (allSummaries.length === 0) return "";
+
+    const selected = selectRecentSummaries(allSummaries, cwd);
+    if (selected.length === 0) return "";
+
+    const sections: string[] = [];
+    let totalChars = 0;
+
+    for (const index of selected) {
+      const summary = await loadSummary(index.filePath);
+      if (!summary) continue;
+
+      const section = `### ${summary.title}\n*${summary.metadata.date} | ${summary.metadata.provider}*\n\n${summary.body}`;
+
+      if (totalChars + section.length > MAX_MEMORY_CHARS && sections.length > 0) {
+        break;
+      }
+
+      sections.push(section);
+      totalChars += section.length;
+    }
+
+    if (sections.length === 0) return "";
+
+    return `## Recent Sessions\n\n${sections.join("\n\n---\n\n")}`;
+  } catch {
+    // Memory directory doesn't exist or can't be read — that's fine
+    return "";
+  }
+}
+
 async function main() {
   // Skip context loading for subagent sessions
   if (isSubagent()) {
@@ -60,6 +108,13 @@ async function main() {
   console.error("📂 Loading user files...");
   const userFiles = await loadUserFiles(shakaHome);
   contextParts.push(...userFiles);
+
+  // Load recent session summaries
+  const memorySections = await loadRecentSessions(shakaHome);
+  if (memorySections) {
+    contextParts.push(memorySections);
+    console.error("📝 Loaded recent session summaries");
+  }
 
   if (contextParts.length === 0) {
     console.error("⚠️ No context files loaded");
