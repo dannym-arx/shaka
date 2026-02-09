@@ -68,6 +68,13 @@ export {
 } from "./memory/transcript";
 
 export {
+  type SessionMetadata,
+  type SessionSummary,
+  buildSummarizationPrompt,
+  parseSummaryOutput,
+} from "./memory/summarize";
+
+export {
   type SemVer,
   type GitRef,
   parseSemver,
