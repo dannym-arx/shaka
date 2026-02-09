@@ -2,6 +2,24 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { discoverTools, isToolDefinition } from "../../../src/mcp/tool-discovery";
 
+describe("default tools", () => {
+  const defaultToolsDir = `${import.meta.dir}/../../../defaults/system/tools`;
+
+  test("memory-search tool is discoverable", async () => {
+    const tools = await discoverTools(defaultToolsDir);
+    const memoryTool = tools.find((t) => t.name === "memory-search");
+    expect(memoryTool).toBeDefined();
+  });
+
+  test("memory-search tool has correct schema", async () => {
+    const tools = await discoverTools(defaultToolsDir);
+    const memoryTool = tools.find((t) => t.name === "memory-search");
+    expect(memoryTool?.description).toContain("session");
+    expect(memoryTool?.inputSchema.properties).toHaveProperty("query");
+    expect(memoryTool?.inputSchema.required).toContain("query");
+  });
+});
+
 describe("tool-discovery", () => {
   const testToolsDir = "/tmp/shaka-test-tools";
 
