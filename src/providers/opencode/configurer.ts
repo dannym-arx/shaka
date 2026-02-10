@@ -33,12 +33,8 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
     this.opencodeConfigDir = options?.opencodeConfigDir ?? defaultOpencodeConfigDir();
   }
 
-  async isInstalled(): Promise<boolean> {
-    const proc = Bun.spawn(["which", "opencode"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    return (await proc.exited) === 0;
+  isInstalled(): boolean {
+    return Bun.which("opencode") !== null;
   }
 
   async install(config: InstallConfig): Promise<Result<void, Error>> {

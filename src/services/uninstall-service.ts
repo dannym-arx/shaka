@@ -18,7 +18,7 @@ import { type DetectedProviders, detectInstalledProviders } from "./provider-det
 export interface UninstallServiceConfig {
   shakaHome: string;
   /** Override provider detection (for testing) */
-  detectProviders?: () => Promise<DetectedProviders>;
+  detectProviders?: () => DetectedProviders | Promise<DetectedProviders>;
 }
 
 export interface UninstallOptions {
@@ -37,7 +37,7 @@ export interface UninstallResult {
 
 export class UninstallService {
   private readonly shakaHome: string;
-  private readonly detectProviders: () => Promise<DetectedProviders>;
+  private readonly detectProviders: () => DetectedProviders | Promise<DetectedProviders>;
 
   constructor(config: UninstallServiceConfig) {
     this.shakaHome = config.shakaHome;

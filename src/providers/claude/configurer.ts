@@ -140,12 +140,8 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
     this.runCommand = options?.runCommand ?? defaultRunCommand;
   }
 
-  async isInstalled(): Promise<boolean> {
-    const proc = Bun.spawn(["which", "claude"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    return (await proc.exited) === 0;
+  isInstalled(): boolean {
+    return Bun.which("claude") !== null;
   }
 
   async install(config: InstallConfig): Promise<Result<void, Error>> {

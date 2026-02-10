@@ -11,7 +11,7 @@ export interface ProviderConfigurer {
   readonly name: ProviderName;
 
   /** Check if provider CLI is installed */
-  isInstalled(): Promise<boolean>;
+  isInstalled(): boolean;
 
   /** Install Shaka hooks, agents, and skills for this provider */
   install(config: InstallConfig): Promise<Result<void, Error>>;

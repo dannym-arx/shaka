@@ -20,26 +20,23 @@ let cachedDetection: DetectedProviders | null = null;
 /**
  * Check if a specific provider CLI is installed.
  */
-export async function isProviderInstalled(provider: ProviderName): Promise<boolean> {
-  const result = await Bun.$`which ${provider}`.quiet().nothrow();
-  return result.exitCode === 0;
+export function isProviderInstalled(provider: ProviderName): boolean {
+  return Bun.which(provider) !== null;
 }
 
 /**
  * Detect all installed provider CLIs.
  * Results are cached for the session.
  */
-export async function detectInstalledProviders(): Promise<DetectedProviders> {
+export function detectInstalledProviders(): DetectedProviders {
   if (cachedDetection) {
     return cachedDetection;
   }
 
-  const [claude, opencode] = await Promise.all([
-    isProviderInstalled("claude"),
-    isProviderInstalled("opencode"),
-  ]);
-
-  cachedDetection = { claude, opencode };
+  cachedDetection = {
+    claude: isProviderInstalled("claude"),
+    opencode: isProviderInstalled("opencode"),
+  };
   return cachedDetection;
 }
 

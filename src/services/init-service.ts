@@ -27,7 +27,7 @@ export interface InitServiceConfig {
   /** Path to repo root (for bun link; for testing) */
   repoRoot?: string;
   /** Override provider detection (for testing) */
-  detectProviders?: () => Promise<DetectedProviders>;
+  detectProviders?: () => DetectedProviders | Promise<DetectedProviders>;
   /** Override bun link execution (for testing) */
   runBunLink?: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
 }
@@ -81,7 +81,7 @@ export class InitService {
   private readonly shakaHome: string;
   private readonly defaultsPath: string;
   private readonly repoRoot: string;
-  private readonly detectProviders: () => Promise<DetectedProviders>;
+  private readonly detectProviders: () => DetectedProviders | Promise<DetectedProviders>;
   private readonly runBunLink: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
 
   constructor(config: InitServiceConfig) {
