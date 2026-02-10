@@ -33,9 +33,10 @@ async function run(args: string[], cwd: string): Promise<{ stdout: string; ok: b
   return { stdout: stdout.trim(), ok: exitCode === 0 };
 }
 
-async function getRepoRoot(): Promise<string | null> {
-  const { stdout, ok } = await run(["git", "rev-parse", "--show-toplevel"], ".");
-  return ok ? stdout : null;
+function getRepoRoot(): string {
+  // Resolve from this file's location — works regardless of cwd.
+  // src/commands/update.ts → ../../ = repo root
+  return new URL("../..", import.meta.url).pathname;
 }
 
 async function checkForUpdate(repoRoot: string): Promise<UpdateInfo> {
@@ -136,11 +137,7 @@ export function createUpdateCommand(): Command {
     .description("Update Shaka to the latest stable release")
     .option("--force", "Skip major version confirmation")
     .action(async (options) => {
-      const repoRoot = await getRepoRoot();
-      if (!repoRoot) {
-        console.error("ERROR: Not in a git repository. Run this from the shaka directory.");
-        process.exit(1);
-      }
+      const repoRoot = getRepoRoot();
 
       console.log("Checking for updates...\n");
       const info = await checkForUpdate(repoRoot);
