@@ -118,8 +118,10 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
   private generatePluginContent(config: HookConfig, hooks: DiscoveredHook[]): string {
     // Group hooks by Shaka canonical event names
     const sessionStartHooks = hooks.filter((h) => h.event === "session.start");
+    const sessionEndHooks = hooks.filter((h) => h.event === "session.end");
     const userPromptHooks = hooks.filter((h) => h.event === "prompt.submit");
     const preToolHooks = hooks.filter((h) => h.event === "tool.before");
+    const postToolHooks = hooks.filter((h) => h.event === "tool.after");
 
     // Build matcher map for tool hooks: { hookPath: matchers[] | null }
     const toolHookMatchers = preToolHooks.map((h) => ({
@@ -136,6 +138,7 @@ ${hooks.map((h) => ` *   - ${h.filename} (${h.event}${h.matchers ? `, matchers: 
  */
 
 const SHAKA_HOME = "${config.shakaHome}";
+const IDLE_SUMMARY_DELAY = 15_000;
 
 interface ClaudeHookInput {
   session_id: string;
@@ -243,7 +246,8 @@ function shouldRunForTool(hook: ToolHookConfig, toolName: string): boolean {
 export const ShakaPlugin = async (ctx: { directory: string; [key: string]: unknown }) => {
   // Session start context (loaded once at plugin init)
   let sessionContext: string | null = null;
-  const sessionId = \`opencode-\${Date.now()}\`;
+  let sessionId = \`opencode-\${Date.now()}\`;
+${sessionEndHooks.length > 0 ? "  let idleTimer: Timer | null = null;" : ""}
 
 ${
   sessionStartHooks.length > 0
@@ -342,6 +346,85 @@ ${
 
         // { continue: true } = allow, keep going
         // null/error = fail open, keep going
+      }
+    },
+`
+    : ""
+}
+
+${
+  postToolHooks.length > 0
+    ? `
+    // Post-tool execution hooks
+    "tool.execute.after": async (
+      input: { tool: string; sessionID: string; callID: string },
+      output: { args: Record<string, unknown> }
+    ) => {
+      const claudeToolName = normalizeToolName(input.tool);
+      const claudeArgs = normalizeArgs(input.tool, output.args);
+
+      const claudeInput: ClaudeHookInput = {
+        session_id: input.sessionID || sessionId,
+        tool_name: claudeToolName,
+        tool_input: claudeArgs,
+      };
+
+      const postToolHookPaths = ${JSON.stringify(postToolHooks.map((h) => h.path))};
+      for (const hookPath of postToolHookPaths) {
+        await runHookRaw(hookPath, claudeInput);
+      }
+    },
+`
+    : ""
+}
+
+${
+  sessionEndHooks.length > 0
+    ? `
+    // Catch-all event handler for session lifecycle
+    // session.created: capture session ID, cancel pending timer
+    // session.idle: start debounce timer — run session-end hooks after IDLE_SUMMARY_DELAY
+    // session.status:busy: cancel timer — user is still active
+    event: async ({ event }: { event: { type: string; properties?: Record<string, unknown> } }) => {
+      if (event.type === "session.created") {
+        const info = event.properties?.info as { id?: string } | undefined;
+        sessionId = info?.id ?? sessionId;
+        if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; }
+        console.error(\`[shaka] Session created: \${sessionId}\`);
+      }
+
+      if (event.type === "session.status") {
+        const status = event.properties?.status as { type?: string } | undefined;
+        if (status?.type === "busy" && idleTimer) {
+          clearTimeout(idleTimer);
+          idleTimer = null;
+          console.error("[shaka] Activity resumed — cancelled summary timer");
+        }
+      }
+
+      if (event.type === "session.idle") {
+        // Cancel any previous timer (multiple idles can fire)
+        if (idleTimer) clearTimeout(idleTimer);
+
+        console.error(\`[shaka] Session idle — starting \${IDLE_SUMMARY_DELAY / 1000}s summary timer\`);
+        idleTimer = setTimeout(async () => {
+          idleTimer = null;
+          console.error("[shaka] Idle timeout — running session-end hooks");
+
+          const sessionEndHookPaths = ${JSON.stringify(sessionEndHooks.map((h) => h.path))};
+          for (const hookPath of sessionEndHookPaths) {
+            try {
+              await runHookRaw(hookPath, {
+                session_id: sessionId,
+                reason: "idle",
+                cwd: ctx.directory,
+                provider: "opencode",
+              });
+            } catch (e) {
+              console.error(\`[shaka] Session-end hook error: \${e instanceof Error ? e.message : String(e)}\`);
+            }
+          }
+        }, IDLE_SUMMARY_DELAY);
       }
     },
 `

@@ -2,8 +2,10 @@
  * Summary file storage: write, list, load, and select session summaries.
  *
  * Files are stored as markdown with YAML frontmatter in memory/sessions/.
- * Filename format: YYYY-MM-DD-{slug}-{hash8}.md
+ * Filename format: YYYY-MM-DD-{hash8}.md
  * hash8 = first 8 chars of SHA-256(sessionId) for provider-agnostic uniqueness.
+ * Title lives in frontmatter and heading, not filename — ensures one file per
+ * session per day so re-summarization overwrites cleanly.
  */
 
 import { mkdir, readdir } from "node:fs/promises";
@@ -30,9 +32,8 @@ export async function writeSummary(memoryDir: string, summary: SessionSummary): 
   const sessionsDir = `${memoryDir}/sessions`;
   await mkdir(sessionsDir, { recursive: true });
 
-  const slug = slugify(summary.title);
   const sessionHash = hashSessionId(summary.metadata.sessionId);
-  const filename = `${summary.metadata.date}-${slug}-${sessionHash}.md`;
+  const filename = `${summary.metadata.date}-${sessionHash}.md`;
   const filePath = `${sessionsDir}/${filename}`;
 
   const content = serializeSummary(summary);
@@ -127,15 +128,6 @@ function hashSessionId(sessionId: string): string {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(sessionId);
   return hasher.digest("hex").slice(0, 8);
-}
-
-function slugify(title: string): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 40)
-    .replace(/-+$/, "");
 }
 
 function serializeSummary(summary: SessionSummary): string {

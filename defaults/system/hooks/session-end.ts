@@ -16,6 +16,7 @@ import {
   type NormalizedMessage,
   type SessionMetadata,
   buildSummarizationPrompt,
+  getSummarizationModel,
   inference,
   isSubagent,
   parseClaudeCodeTranscript,
@@ -156,9 +157,11 @@ async function main() {
   // Build prompt and call inference
   const prompt = buildSummarizationPrompt(truncated, metadata);
 
-  console.error("Calling inference for summarization...");
+  const model = await getSummarizationModel(provider);
+  console.error(`Calling inference for summarization${model ? ` (model: ${model})` : ""}...`);
   const result = await inference({
     userPrompt: prompt,
+    model,
     maxTokens: 4096,
     timeout: 60000,
   });
@@ -169,14 +172,17 @@ async function main() {
   }
 
   // Parse the summary output
-  const summary = parseSummaryOutput(result.text);
-  if (!summary) {
+  const parsed = parseSummaryOutput(result.text);
+  if (!parsed) {
     console.error("Failed to parse inference output as summary");
     const shakaHome = resolveShakaHome();
     const memoryDir = `${shakaHome}/memory`;
     await saveFailedOutput(memoryDir, sessionId, result.text);
     process.exit(0);
   }
+
+  // Use original metadata (not LLM's echo) to ensure deterministic filenames
+  const summary = { ...parsed, metadata };
 
   // Write summary to disk
   const shakaHome = resolveShakaHome();

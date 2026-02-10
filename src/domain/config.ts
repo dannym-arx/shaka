@@ -15,9 +15,11 @@ export interface ShakaConfig {
   readonly providers: {
     readonly claude: {
       readonly enabled: boolean;
+      readonly summarization_model?: string;
     };
     readonly opencode: {
       readonly enabled: boolean;
+      readonly summarization_model?: string;
     };
   };
   readonly assistant: {
@@ -137,6 +139,29 @@ export async function getAssistantName(shakaHome?: string): Promise<string> {
 export async function getPrincipalName(shakaHome?: string): Promise<string> {
   const config = await loadConfig(shakaHome);
   return config?.principal?.name ?? "User";
+}
+
+/**
+ * Get the model to use for session summarization for a given provider.
+ *
+ * Per-provider config (providers.claude.summarization_model, etc.):
+ *   claude: defaults to "haiku" (cheap/fast)
+ *   opencode: defaults to "auto" (use whatever model is configured)
+ *
+ * - "auto": use whatever model the provider already has configured
+ * - "haiku": use Claude Haiku (Claude CLI alias)
+ * - "openrouter/anthropic/claude-haiku-4.5": explicit provider/model for opencode
+ *
+ * Returns undefined when "auto" so inference skips the --model flag entirely.
+ */
+export async function getSummarizationModel(
+  provider: "claude" | "opencode",
+  shakaHome?: string,
+): Promise<string | undefined> {
+  const defaults = { claude: "haiku", opencode: "auto" };
+  const config = await loadConfig(shakaHome);
+  const model = config?.providers?.[provider]?.summarization_model ?? defaults[provider];
+  return model === "auto" ? undefined : model;
 }
 
 /**

@@ -25,6 +25,7 @@ export {
   isSubagent,
   getAssistantName,
   getPrincipalName,
+  getSummarizationModel,
 } from "./domain/config";
 
 export {

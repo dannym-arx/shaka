@@ -66,52 +66,33 @@ describe("Storage", () => {
       expect(await Bun.file(filePath).exists()).toBe(true);
     });
 
-    test("filename includes date, slug, and session hash", async () => {
-      const summary = makeSummary({ title: "Fix auth token bug", sessionId: "ses-deadbeef99" });
+    test("filename is date-hash format", async () => {
+      const summary = makeSummary({ sessionId: "ses-deadbeef99" });
       const filePath = await writeSummary(testMemoryDir, summary);
       const filename = filePath.split("/").pop();
 
+      // Format: YYYY-MM-DD-{hash8}.md
+      expect(filename).toMatch(/^\d{4}-\d{2}-\d{2}-[a-f0-9]{8}\.md$/);
       expect(filename).toContain("2026-02-09");
-      expect(filename).toContain("fix-auth-token-bug");
-      // Session hash is SHA-256 of session ID, first 8 hex chars
-      expect(filename).toMatch(/[a-f0-9]{8}\.md$/);
     });
 
-    test("slug is lowercase with hyphens", async () => {
-      const summary = makeSummary({ title: "Refactor Auth Module & Fix Tests" });
-      const filePath = await writeSummary(testMemoryDir, summary);
-      const filename = filePath.split("/").pop() ?? "";
-
-      // No uppercase, no special chars except hyphens
-      expect(filename).not.toMatch(/[A-Z]/);
-      expect(filename).not.toMatch(/[&]/);
-    });
-
-    test("slug is truncated to max 40 chars", async () => {
-      const summary = makeSummary({
-        title:
-          "This is a very long title that should definitely be truncated to fit the filename limit",
-      });
-      const filePath = await writeSummary(testMemoryDir, summary);
-      const filename = filePath.split("/").pop() ?? "";
-
-      // Extract slug portion: after date- and before -hash.md
-      const slugMatch = filename.match(/^\d{4}-\d{2}-\d{2}-(.+)-[a-f0-9]{8}\.md$/);
-      expect(slugMatch).not.toBeNull();
-      expect(slugMatch?.[1]?.length).toBeLessThanOrEqual(40);
-    });
-
-    test("session hash is deterministic for same session ID", async () => {
-      const summary1 = makeSummary({ sessionId: "same-id", title: "First" });
-      const summary2 = makeSummary({ sessionId: "same-id", title: "Second" });
+    test("same session ID produces same filename (overwrites)", async () => {
+      const summary1 = makeSummary({ sessionId: "same-id", title: "First attempt" });
+      const summary2 = makeSummary({ sessionId: "same-id", title: "Updated summary" });
       const path1 = await writeSummary(testMemoryDir, summary1);
       const path2 = await writeSummary(testMemoryDir, summary2);
 
-      // Both have the same hash suffix since session ID is the same
-      const hash1 = path1.match(/([a-f0-9]{8})\.md$/)?.[1];
-      const hash2 = path2.match(/([a-f0-9]{8})\.md$/)?.[1];
-      expect(hash1).toBeDefined();
-      expect(hash1).toBe(hash2);
+      // Same filename — second write overwrites first
+      expect(path1).toBe(path2);
+
+      // Content is the updated version
+      const loaded = await loadSummary(path2);
+      expect(loaded?.title).toBe("Updated summary");
+
+      // Only one file exists
+      const glob = new Bun.Glob("*.md");
+      const files = await Array.fromAsync(glob.scan(`${testMemoryDir}/sessions`));
+      expect(files.length).toBe(1);
     });
 
     test("different session IDs produce different hashes", async () => {

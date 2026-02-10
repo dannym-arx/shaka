@@ -4,6 +4,7 @@ import {
   type ShakaConfig,
   getAssistantName,
   getPrincipalName,
+  getSummarizationModel,
   isSubagent,
   loadConfig,
   loadShakaFile,
@@ -284,6 +285,102 @@ describe("Config", () => {
     test("returns default when config missing", async () => {
       const name = await getPrincipalName(testShakaHome);
       expect(name).toBe("User");
+    });
+  });
+
+  describe("getSummarizationModel", () => {
+    const testShakaHome = "/tmp/shaka-test-summ-model";
+
+    beforeEach(async () => {
+      await rm(testShakaHome, { recursive: true, force: true });
+      await mkdir(testShakaHome, { recursive: true });
+    });
+
+    afterEach(async () => {
+      await rm(testShakaHome, { recursive: true, force: true });
+    });
+
+    test("defaults to haiku for claude", async () => {
+      const model = await getSummarizationModel("claude", testShakaHome);
+      expect(model).toBe("haiku");
+    });
+
+    test("defaults to undefined (auto) for opencode", async () => {
+      const model = await getSummarizationModel("opencode", testShakaHome);
+      expect(model).toBeUndefined();
+    });
+
+    test("reads claude model from config", async () => {
+      const config: ShakaConfig = {
+        version: "0.1.0",
+        reasoning: { enabled: true },
+        providers: {
+          claude: { enabled: false, summarization_model: "sonnet" },
+          opencode: { enabled: false },
+        },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const model = await getSummarizationModel("claude", testShakaHome);
+      expect(model).toBe("sonnet");
+    });
+
+    test("reads opencode model from config", async () => {
+      const config: ShakaConfig = {
+        version: "0.1.0",
+        reasoning: { enabled: true },
+        providers: {
+          claude: { enabled: false },
+          opencode: {
+            enabled: false,
+            summarization_model: "openrouter/anthropic/claude-haiku-4.5",
+          },
+        },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const model = await getSummarizationModel("opencode", testShakaHome);
+      expect(model).toBe("openrouter/anthropic/claude-haiku-4.5");
+    });
+
+    test("auto returns undefined", async () => {
+      const config: ShakaConfig = {
+        version: "0.1.0",
+        reasoning: { enabled: true },
+        providers: {
+          claude: { enabled: false, summarization_model: "auto" },
+          opencode: { enabled: false },
+        },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const model = await getSummarizationModel("claude", testShakaHome);
+      expect(model).toBeUndefined();
+    });
+
+    test("providers can have different models", async () => {
+      const config: ShakaConfig = {
+        version: "0.1.0",
+        reasoning: { enabled: true },
+        providers: {
+          claude: { enabled: false, summarization_model: "haiku" },
+          opencode: { enabled: false, summarization_model: "openrouter/google/gemini-2.0-flash" },
+        },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const claude = await getSummarizationModel("claude", testShakaHome);
+      const opencode = await getSummarizationModel("opencode", testShakaHome);
+      expect(claude).toBe("haiku");
+      expect(opencode).toBe("openrouter/google/gemini-2.0-flash");
     });
   });
 

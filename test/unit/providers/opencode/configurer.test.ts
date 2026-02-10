@@ -200,6 +200,161 @@ export const MATCHER = ["Bash"] as const;
       expect(content).toContain("[SHAKA SECURITY] Warning");
     });
 
+    test("generates event handler for session.end hooks", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).toContain("event:");
+      expect(content).toContain("session.created");
+      expect(content).toContain("session.idle");
+    });
+
+    test("generated plugin tracks session ID from session.created", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).toContain("sessionId");
+      expect(content).toContain("event.properties");
+    });
+
+    test("generated plugin has debounce timer for session.idle", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).toContain("idleTimer");
+      expect(content).toContain("setTimeout");
+      expect(content).toContain("clearTimeout");
+    });
+
+    test("generated plugin cancels timer on session.status busy", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).toContain("session.status");
+      expect(content).toContain('"busy"');
+      expect(content).toContain("clearTimeout");
+    });
+
+    test("generated plugin passes session_id and cwd to session.end hooks", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).toContain("session_id");
+      expect(content).toContain("cwd");
+      expect(content).toContain("reason");
+    });
+
+    test("does not generate event handler when no session.end hooks", async () => {
+      // Only session.start hook exists (from beforeEach)
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).not.toContain("idleTimer");
+    });
+
+    test("generates tool.execute.after handler for tool.after hooks", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/post-tool.ts`,
+        `export const TRIGGER = ["tool.after"] as const;
+console.log("tool after");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
+      expect(content).toContain('"tool.execute.after"');
+    });
+
+    test("plugin with session.end hooks passes syntax validation", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+
+      expect(result.ok).toBe(true);
+    });
+
+    test("plugin with all hook types passes syntax validation", async () => {
+      await Bun.write(
+        `${testShakaHome}/system/hooks/session-end.ts`,
+        `export const TRIGGER = ["session.end"] as const;
+console.log("session end");
+`,
+      );
+      await Bun.write(
+        `${testShakaHome}/system/hooks/post-tool.ts`,
+        `export const TRIGGER = ["tool.after"] as const;
+console.log("tool after");
+`,
+      );
+      await Bun.write(
+        `${testShakaHome}/system/hooks/security.ts`,
+        `export const TRIGGER = ["tool.before"] as const;
+export const MATCHER = ["Bash"] as const;
+`,
+      );
+      await Bun.write(
+        `${testShakaHome}/system/hooks/format.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;
+console.log("format");
+`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+
+      expect(result.ok).toBe(true);
+    });
+
     test("exports a plugin function, not a plain object", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 

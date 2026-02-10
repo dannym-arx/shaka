@@ -38,7 +38,9 @@ async function callClaudeCLI(options: InferenceOptions): Promise<InferenceResult
     : options.userPrompt;
 
   const maxTokens = options.maxTokens || 256;
-  const result = await Bun.$`claude -p ${prompt} --max-tokens ${maxTokens}`.quiet().nothrow();
+  const args = ["-p", prompt, "--max-tokens", String(maxTokens)];
+  if (options.model) args.push("--model", options.model);
+  const result = await Bun.$`claude ${args}`.quiet().nothrow();
 
   if (result.exitCode !== 0) {
     return {
@@ -57,8 +59,11 @@ async function callOpenCodeCLI(options: InferenceOptions): Promise<InferenceResu
     ? `${options.systemPrompt}\n\n${options.userPrompt}`
     : options.userPrompt;
 
-  // opencode run expects prompt as argument
-  const result = await Bun.$`opencode run ${prompt}`.quiet().nothrow();
+  const args = ["run", prompt];
+  // opencode expects provider/model format (e.g., "anthropic/claude-haiku-4-5")
+  // Skip bare aliases like "haiku" which are Claude CLI-specific
+  if (options.model?.includes("/")) args.push("--model", options.model);
+  const result = await Bun.$`opencode ${args}`.quiet().nothrow();
 
   if (result.exitCode !== 0) {
     return {

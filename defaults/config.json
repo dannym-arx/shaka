@@ -5,10 +5,12 @@
   },
   "providers": {
     "claude": {
-      "enabled": false
+      "enabled": false,
+      "summarization_model": "haiku"
     },
     "opencode": {
-      "enabled": false
+      "enabled": false,
+      "summarization_model": "auto"
     }
   },
   "assistant": {
