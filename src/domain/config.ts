@@ -5,6 +5,8 @@
  * This file defines the TypeScript interface and validation.
  */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { type Result, err, ok } from "./result";
 
 export interface ShakaConfig {
@@ -64,6 +66,7 @@ export interface EnvVars {
   SHAKA_HOME?: string;
   XDG_CONFIG_HOME?: string;
   HOME?: string;
+  USERPROFILE?: string;
 }
 
 export function resolveShakaHome(env?: EnvVars): string {
@@ -76,15 +79,17 @@ export function resolveShakaHome(env?: EnvVars): string {
 
   // 2. XDG_CONFIG_HOME/shaka
   if (e.XDG_CONFIG_HOME) {
-    return `${e.XDG_CONFIG_HOME}/shaka`;
+    return join(e.XDG_CONFIG_HOME, "shaka");
   }
 
-  // 3. ~/.config/shaka
-  if (e.HOME) {
-    return `${e.HOME}/.config/shaka`;
+  // 3. HOME or USERPROFILE + .config/shaka
+  const home = e.HOME || e.USERPROFILE;
+  if (home) {
+    return join(home, ".config", "shaka");
   }
 
-  throw new Error("HOME environment variable not set");
+  // 4. os.homedir() fallback (never throws)
+  return join(homedir(), ".config", "shaka");
 }
 
 /**
@@ -93,7 +98,7 @@ export function resolveShakaHome(env?: EnvVars): string {
  */
 export async function loadConfig(shakaHome?: string): Promise<ShakaConfig | null> {
   const home = shakaHome ?? resolveShakaHome();
-  const configPath = `${home}/config.json`;
+  const configPath = join(home, "config.json");
   const file = Bun.file(configPath);
 
   if (!(await file.exists())) {
@@ -116,7 +121,7 @@ export async function loadConfig(shakaHome?: string): Promise<ShakaConfig | null
 export function isSubagent(env: NodeJS.ProcessEnv = process.env): boolean {
   // Claude Code: task agents set CLAUDE_AGENT_TYPE or run in .claude/Agents/
   if (env.CLAUDE_AGENT_TYPE !== undefined) return true;
-  if (env.CLAUDE_PROJECT_DIR?.includes("/.claude/Agents/")) return true;
+  if (env.CLAUDE_PROJECT_DIR?.replace(/\\/g, "/").includes("/.claude/Agents/")) return true;
 
   // opencode: check for subagent indicators
   if (env.OPENCODE_SUBAGENT === "true") return true;
@@ -181,7 +186,7 @@ export async function loadShakaFile(
   // For system files, check customization override first
   if (relativePath.startsWith("system/")) {
     const basename = relativePath.replace("system/", "");
-    const customPath = `${home}/customizations/${basename}`;
+    const customPath = join(home, "customizations", basename);
     const customFile = Bun.file(customPath);
     if (await customFile.exists()) {
       return customFile.text();
@@ -189,7 +194,7 @@ export async function loadShakaFile(
   }
 
   // Load from path as-is
-  const fullPath = `${home}/${relativePath}`;
+  const fullPath = join(home, relativePath);
   const file = Bun.file(fullPath);
   if (await file.exists()) {
     return file.text();

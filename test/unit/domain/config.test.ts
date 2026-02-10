@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import {
   type ShakaConfig,
   getAssistantName,
@@ -103,16 +105,22 @@ describe("Config", () => {
         XDG_CONFIG_HOME: "/custom/config",
         HOME: "/home/user",
       });
-      expect(home).toBe("/custom/config/shaka");
+      expect(home).toBe(join("/custom/config", "shaka"));
     });
 
     test("falls back to ~/.config/shaka", () => {
       const home = resolveShakaHome({ HOME: "/home/user" });
-      expect(home).toBe("/home/user/.config/shaka");
+      expect(home).toBe(join("/home/user", ".config", "shaka"));
     });
 
-    test("throws if HOME not set", () => {
-      expect(() => resolveShakaHome({})).toThrow("HOME environment variable not set");
+    test("uses USERPROFILE when HOME is not set", () => {
+      const home = resolveShakaHome({ USERPROFILE: "C:\\Users\\test" });
+      expect(home).toBe(join("C:\\Users\\test", ".config", "shaka"));
+    });
+
+    test("falls back to os.homedir() when no env vars set", () => {
+      const home = resolveShakaHome({});
+      expect(home).toBe(join(homedir(), ".config", "shaka"));
     });
 
     test("uses process.env when no argument provided", () => {
@@ -411,6 +419,12 @@ describe("Config", () => {
 
     test("returns true when OPENCODE_AGENT_ID is set", () => {
       expect(isSubagent({ OPENCODE_AGENT_ID: "agent-123" })).toBe(true);
+    });
+
+    test("detects Claude Agents path with Windows backslashes", () => {
+      expect(isSubagent({ CLAUDE_PROJECT_DIR: "C:\\Users\\test\\.claude\\Agents\\task-123" })).toBe(
+        true,
+      );
     });
   });
 });
