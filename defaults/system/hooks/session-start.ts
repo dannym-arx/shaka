@@ -24,20 +24,73 @@ export const HOOK_VERSION = "0.5.0";
 const MAX_MEMORY_CHARS = 5000;
 
 /**
+ * Resolve the defaults/user/ directory from the system/ symlink.
+ *
+ * SHAKA_HOME/system is always a symlink to <repo>/defaults/system.
+ * The user templates live at <repo>/defaults/user/ — one level up
+ * from the symlink target.
+ *
+ * Returns null if the symlink can't be resolved (shouldn't happen
+ * in a properly initialized installation).
+ */
+async function resolveDefaultsUserDir(shakaHome: string): Promise<string | null> {
+  try {
+    const { readlink } = await import("node:fs/promises");
+    const systemTarget = await readlink(`${shakaHome}/system`);
+    // systemTarget is e.g. /path/to/shaka/defaults/system
+    // defaults/user/ is at ../user relative to that
+    return `${systemTarget}/../user`;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Check whether a user file is identical to its default plain-markdown template.
+ *
+ * Only compares against direct .md files in defaults/user/ (goals.md, etc.).
+ * Files sourced from .eta templates (user.md, assistant.md) are always included
+ * because they contain configured identity info that's useful as context.
+ *
+ * Returns true if the file matches its template verbatim (i.e. unmodified).
+ * Returns false if no template exists or the content differs.
+ */
+async function isUnmodifiedTemplate(
+  content: string,
+  filename: string,
+  defaultsUserDir: string,
+): Promise<boolean> {
+  const templatePath = `${defaultsUserDir}/${filename}`;
+  const templateFile = Bun.file(templatePath);
+  if (!(await templateFile.exists())) return false;
+
+  const defaultContent = await templateFile.text();
+  return content.trim() === defaultContent.trim();
+}
+
+/**
  * Load all markdown files from user/ directory.
+ * Skips plain-markdown files that are still identical to their default templates
+ * to avoid injecting noise tokens into the session context.
  */
 async function loadUserFiles(shakaHome: string): Promise<string[]> {
   const userDir = `${shakaHome}/user`;
+  const defaultsUserDir = await resolveDefaultsUserDir(shakaHome);
   const contents: string[] = [];
 
   try {
     const glob = new Bun.Glob("*.md");
     for await (const file of glob.scan({ cwd: userDir })) {
       const content = await Bun.file(`${userDir}/${file}`).text();
-      if (content.trim()) {
-        contents.push(content);
-        console.error(`  ✓ user/${file}`);
+      if (!content.trim()) continue;
+
+      if (defaultsUserDir && (await isUnmodifiedTemplate(content, file, defaultsUserDir))) {
+        console.error(`  ⏭ user/${file} (unmodified template, skipped)`);
+        continue;
       }
+
+      contents.push(content);
+      console.error(`  ✓ user/${file}`);
     }
   } catch {
     // user/ directory doesn't exist yet - that's ok
@@ -104,7 +157,7 @@ async function main() {
     console.error("✅ Loaded system/base-reasoning-framework.md");
   }
 
-  // Load all user files
+  // Load user files (skips unmodified plain-markdown templates)
   console.error("📂 Loading user files...");
   const userFiles = await loadUserFiles(shakaHome);
   contextParts.push(...userFiles);
