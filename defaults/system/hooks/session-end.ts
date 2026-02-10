@@ -162,7 +162,6 @@ async function main() {
   const result = await inference({
     userPrompt: prompt,
     model,
-    maxTokens: 4096,
     timeout: 60000,
   });
 

@@ -398,7 +398,7 @@ ${
         if (status?.type === "busy" && idleTimer) {
           clearTimeout(idleTimer);
           idleTimer = null;
-          console.error("[shaka] Activity resumed — cancelled summary timer");
+          // Timer cancelled — user resumed activity
         }
       }
 
@@ -406,7 +406,7 @@ ${
         // Cancel any previous timer (multiple idles can fire)
         if (idleTimer) clearTimeout(idleTimer);
 
-        console.error(\`[shaka] Session idle — starting \${IDLE_SUMMARY_DELAY / 1000}s summary timer\`);
+        // Start debounce timer — if user stays idle, run session-end hooks
         idleTimer = setTimeout(async () => {
           idleTimer = null;
           console.error("[shaka] Idle timeout — running session-end hooks");

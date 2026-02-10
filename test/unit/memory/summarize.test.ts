@@ -225,6 +225,70 @@ Date without quotes.
       expect(result?.metadata.date).toBe("2026-02-09");
     });
 
+    test("handles output wrapped in markdown code fences", () => {
+      const fenced = `\`\`\`markdown
+---
+date: 2026-02-09
+cwd: /projects/myapp
+tags: [auth, bug-fix]
+provider: claude
+session_id: ses-abc123
+---
+
+# Fix auth token expiry
+
+## Summary
+Fixed the token expiry bug.
+
+## Decisions
+- Used strict comparison
+\`\`\``;
+      const result = parseSummaryOutput(fenced);
+      expect(result).not.toBeNull();
+      expect(result?.title).toBe("Fix auth token expiry");
+      expect(result?.tags).toEqual(["auth", "bug-fix"]);
+    });
+
+    test("handles output wrapped in yaml code fences", () => {
+      const fenced = `\`\`\`yaml
+---
+date: 2026-02-09
+cwd: /projects/myapp
+tags: [memory]
+provider: claude
+session_id: ses-yaml-test
+---
+
+# Yaml fenced output
+
+## Summary
+Works with yaml language tag.
+\`\`\``;
+      const result = parseSummaryOutput(fenced);
+      expect(result).not.toBeNull();
+      expect(result?.title).toBe("Yaml fenced output");
+    });
+
+    test("handles output wrapped in plain code fences", () => {
+      const fenced = `\`\`\`
+---
+date: 2026-02-09
+cwd: /projects/myapp
+tags: [test]
+provider: opencode
+session_id: ses-xyz789
+---
+
+# Plain fenced output
+
+## Summary
+Works without language tag.
+\`\`\``;
+      const result = parseSummaryOutput(fenced);
+      expect(result).not.toBeNull();
+      expect(result?.title).toBe("Plain fenced output");
+    });
+
     test("returns null when title heading is missing", () => {
       const noTitle = `---
 date: "2026-02-09"

@@ -24,10 +24,6 @@ export default {
         type: "string" as const,
         description: "Optional system prompt to set context",
       },
-      maxTokens: {
-        type: "number" as const,
-        description: "Maximum tokens in response (default: 256)",
-      },
       expectJson: {
         type: "boolean" as const,
         description: "If true, attempts to parse JSON from response",
@@ -40,7 +36,6 @@ export default {
     const options: InferenceOptions = {
       userPrompt: args.prompt as string,
       systemPrompt: args.systemPrompt as string | undefined,
-      maxTokens: args.maxTokens as number | undefined,
       expectJson: args.expectJson as boolean | undefined,
     };
 

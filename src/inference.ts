@@ -1,6 +1,6 @@
 /**
  * Provider-agnostic inference tool
- * @version 1.1.0
+ * @version 1.2.0
  *
  * Uses CLI tools that handle their own authentication:
  * 1. Claude CLI (claude -p) — if installed
@@ -9,13 +9,13 @@
  * No API keys needed — CLIs manage auth. Install one and inference works.
  */
 
+import { spawn } from "node:child_process";
 import { detectInstalledProviders } from "./services/provider-detection";
 
 export interface InferenceOptions {
   systemPrompt?: string;
   userPrompt: string;
   model?: string;
-  maxTokens?: number;
   timeout?: number;
   expectJson?: boolean;
 }
@@ -32,26 +32,31 @@ export interface InferenceResult {
 // CLI-Based Inference
 // ---------------------------------------------------------------------------
 
+/**
+ * Call Claude CLI for inference.
+ *
+ * Uses spawn (not Bun.$) because Bun.$ drops empty string arguments.
+ * --setting-sources "" disables hooks (prevents recursion).
+ * --tools "" disables tool use (pure text inference).
+ * Prompt is piped via stdin to avoid argument length limits.
+ */
 async function callClaudeCLI(options: InferenceOptions): Promise<InferenceResult> {
-  const prompt = options.systemPrompt
-    ? `${options.systemPrompt}\n\n${options.userPrompt}`
-    : options.userPrompt;
-
-  const maxTokens = options.maxTokens || 256;
-  const args = ["-p", prompt, "--max-tokens", String(maxTokens)];
+  const args = ["--setting-sources", "", "--tools", ""];
   if (options.model) args.push("--model", options.model);
-  const result = await Bun.$`claude ${args}`.quiet().nothrow();
+  if (options.systemPrompt) args.push("--system-prompt", options.systemPrompt);
+  args.push("-p");
 
-  if (result.exitCode !== 0) {
+  const result = await spawnCLI("claude", args, options.userPrompt, options.timeout);
+
+  if (result.code !== 0) {
     return {
       success: false,
-      error: `Claude CLI error: ${result.stderr.toString()}`,
+      error: `Claude CLI error: ${result.stderr}`,
       provider: "claude-cli",
     };
   }
 
-  const text = result.stdout.toString().trim();
-  return parseResponse(text, options.expectJson, "claude-cli");
+  return parseResponse(result.stdout.trim(), options.expectJson, "claude-cli");
 }
 
 async function callOpenCodeCLI(options: InferenceOptions): Promise<InferenceResult> {
@@ -75,6 +80,56 @@ async function callOpenCodeCLI(options: InferenceOptions): Promise<InferenceResu
 
   const text = result.stdout.toString().trim();
   return parseResponse(text, options.expectJson, "opencode-cli");
+}
+
+// ---------------------------------------------------------------------------
+// Process Management
+// ---------------------------------------------------------------------------
+
+function spawnCLI(
+  command: string,
+  args: string[],
+  stdin: string,
+  timeout?: number,
+): Promise<{ code: number; stdout: string; stderr: string }> {
+  return new Promise((resolve) => {
+    let stdout = "";
+    let stderr = "";
+    let settled = false;
+
+    const proc = spawn(command, args, { stdio: ["pipe", "pipe", "pipe"] });
+
+    if (timeout) {
+      setTimeout(() => {
+        if (!settled) {
+          settled = true;
+          proc.kill("SIGTERM");
+          resolve({ code: 1, stdout, stderr: `Timeout after ${timeout}ms` });
+        }
+      }, timeout);
+    }
+
+    proc.stdin.write(stdin);
+    proc.stdin.end();
+    proc.stdout.on("data", (d) => {
+      stdout += d;
+    });
+    proc.stderr.on("data", (d) => {
+      stderr += d;
+    });
+    proc.on("close", (code) => {
+      if (!settled) {
+        settled = true;
+        resolve({ code: code ?? 1, stdout, stderr });
+      }
+    });
+    proc.on("error", (err) => {
+      if (!settled) {
+        settled = true;
+        resolve({ code: 1, stdout: "", stderr: err.message });
+      }
+    });
+  });
 }
 
 // ---------------------------------------------------------------------------

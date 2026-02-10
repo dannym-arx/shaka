@@ -82,6 +82,14 @@ else
   exit 1
 fi
 
+if grep -q '"SessionEnd"' "$SETTINGS"; then
+  pass "SessionEnd hook registered"
+else
+  fail "SessionEnd hook not found in settings.json"
+  cat "$SETTINGS"
+  exit 1
+fi
+
 # ── Command format ────────────────────────────────────────────────────
 
 section "Command format"
@@ -159,6 +167,30 @@ elif echo "$BLOCK_OUTPUT" | grep -q "sk-test-12345"; then
 else
   warn "Could not confirm block (LLM may not have attempted file read)"
   echo "$BLOCK_OUTPUT" | tail -5
+fi
+
+# ── Memory: session summaries ──────────────────────────────────────────
+
+section "Memory"
+
+MEMORY_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/shaka/memory/sessions"
+
+# SessionEnd hooks run asynchronously — wait for summaries to be written
+echo "  Waiting for session summaries..."
+for i in $(seq 1 30); do
+  if ls "$MEMORY_DIR"/*.md >/dev/null 2>&1; then
+    break
+  fi
+  sleep 1
+done
+
+if ls "$MEMORY_DIR"/*.md >/dev/null 2>&1; then
+  COUNT=$(ls "$MEMORY_DIR"/*.md | wc -l)
+  pass "Memory sessions populated ($COUNT summary file(s))"
+else
+  fail "No session summaries found in $MEMORY_DIR after 30s"
+  ls -laR "${XDG_CONFIG_HOME:-$HOME/.config}/shaka/memory/" 2>&1 || true
+  exit 1
 fi
 
 # ── Uninstall ─────────────────────────────────────────────────────────

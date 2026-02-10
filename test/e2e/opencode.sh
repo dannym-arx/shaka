@@ -122,6 +122,22 @@ else
   echo "$BLOCK_OUTPUT" | tail -5
 fi
 
+# ── Memory: directory structure ────────────────────────────────────────
+
+section "Memory"
+
+MEMORY_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/shaka/memory"
+
+# opencode session-end uses a debounce timer that only fires in interactive
+# sessions. `opencode run` exits before the timer triggers, so we can only
+# verify the memory directory was created by session-start context loading.
+if [ -d "$MEMORY_DIR" ]; then
+  pass "Memory directory exists"
+else
+  fail "Memory directory not created"
+  exit 1
+fi
+
 # ── Uninstall ─────────────────────────────────────────────────────────
 
 section "Uninstall"

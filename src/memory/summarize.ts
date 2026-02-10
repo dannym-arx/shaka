@@ -86,8 +86,11 @@ export function parseSummaryOutput(raw: string): SessionSummary | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
 
+  // Strip code fences if present (LLMs wrap output in ```markdown, ```yaml, etc.)
+  const stripped = trimmed.replace(/^```\w*\n/, "").replace(/\n```$/, "");
+
   // Extract frontmatter between --- delimiters
-  const frontmatterMatch = trimmed.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  const frontmatterMatch = stripped.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!frontmatterMatch) return null;
 
   const yamlStr = frontmatterMatch[1];

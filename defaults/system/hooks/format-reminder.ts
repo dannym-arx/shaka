@@ -211,7 +211,6 @@ async function classifyPrompt(prompt: string): Promise<ClassificationResult> {
   const result = await inference({
     systemPrompt,
     userPrompt: `Classify this prompt:\n${prompt}`,
-    maxTokens: 256,
     timeout: 10000,
     expectJson: true,
   });
