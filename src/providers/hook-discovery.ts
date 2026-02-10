@@ -109,6 +109,22 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
 }
 
 /**
+ * Discover hooks from both system/hooks/ and customizations/hooks/ directories.
+ * Customization hooks override system hooks with the same filename.
+ * Additional hooks in customizations/ (no system counterpart) are appended.
+ */
+export async function discoverAllHooks(shakaHome: string): Promise<DiscoveredHook[]> {
+  const systemHooks = await discoverHooks(`${shakaHome}/system/hooks`);
+  const customHooks = await discoverHooks(`${shakaHome}/customizations/hooks`);
+
+  // Customization filenames that override system counterparts
+  const overridden = new Set(customHooks.map((h) => h.filename));
+  const filtered = systemHooks.filter((h) => !overridden.has(h.filename));
+
+  return [...filtered, ...customHooks];
+}
+
+/**
  * Map Shaka event names to Claude Code event names.
  * Used by Claude configurer when writing to settings.json.
  */

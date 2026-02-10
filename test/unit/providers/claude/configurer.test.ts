@@ -5,6 +5,7 @@ import {
   HOOK_EVENTS,
   SHAKA_TO_CLAUDE_EVENT,
   SHAKA_TO_OPENCODE_HOOK,
+  discoverAllHooks,
   discoverHooks,
   parseHookTrigger,
 } from "../../../../src/providers/hook-discovery";
@@ -245,6 +246,27 @@ export const MATCHER = ["Bash"] as const;
       expect(bashEntry).toBeDefined();
       expect(bashEntry.hooks).toHaveLength(2);
     });
+
+    test("discovers hooks from customizations/hooks/ directory", async () => {
+      await mkdir(`${testShakaHome}/customizations/hooks`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/customizations/hooks/custom-prompt.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;
+console.log("custom");
+`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      expect(settings.hooks.UserPromptSubmit).toBeDefined();
+      const catchAll = settings.hooks.UserPromptSubmit.find(
+        (h: { matcher?: string }) => !h.matcher,
+      );
+      expect(catchAll).toBeDefined();
+      expect(catchAll.hooks[0].command).toContain("customizations/hooks/custom-prompt.ts");
+    });
   });
 
   describe("uninstallHooks", () => {
@@ -259,6 +281,26 @@ export const MATCHER = ["Bash"] as const;
       const remaining = (settings.hooks?.SessionStart ?? []).filter(
         (h: { hooks?: Array<{ command?: string }> }) =>
           h.hooks?.some((hook) => hook.command?.includes("/system/hooks/")),
+      );
+      expect(remaining.length).toBe(0);
+    });
+
+    test("removes customization hooks during uninstall", async () => {
+      await mkdir(`${testShakaHome}/customizations/hooks`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/customizations/hooks/custom.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+      await configurer.installHooks({ shakaHome: testShakaHome });
+
+      const result = await configurer.uninstallHooks();
+
+      expect(result.ok).toBe(true);
+      const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
+      const remaining = (settings.hooks?.UserPromptSubmit ?? []).filter(
+        (h: { hooks?: Array<{ command?: string }> }) =>
+          h.hooks?.some((hook) => hook.command?.includes("/customizations/hooks/")),
       );
       expect(remaining.length).toBe(0);
     });
@@ -544,6 +586,69 @@ console.log("security");
       expect(securityHooks).toHaveLength(1);
       expect(securityHooks[0]?.event).toBe("tool.before");
       expect(securityHooks[0]?.matchers).toEqual(["Bash", "Edit", "Write"]);
+    });
+  });
+
+  describe("discoverAllHooks", () => {
+    test("discovers hooks from system/hooks/", async () => {
+      const hooks = await discoverAllHooks(testShakaHome);
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0]?.event).toBe("session.start");
+    });
+
+    test("discovers hooks from customizations/hooks/", async () => {
+      await mkdir(`${testShakaHome}/customizations/hooks`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/customizations/hooks/custom-hook.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;`,
+      );
+
+      const hooks = await discoverAllHooks(testShakaHome);
+      expect(hooks).toHaveLength(2);
+      expect(hooks.map((h) => h.event).sort()).toEqual(["prompt.submit", "session.start"]);
+    });
+
+    test("appends hooks with unique filenames from customizations/", async () => {
+      await mkdir(`${testShakaHome}/customizations/hooks`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/customizations/hooks/extra.ts`,
+        `export const TRIGGER = ["session.start"] as const;`,
+      );
+
+      const hooks = await discoverAllHooks(testShakaHome);
+      const sessionStartHooks = hooks.filter((h) => h.event === "session.start");
+      expect(sessionStartHooks).toHaveLength(2);
+    });
+
+    test("customization hook overrides system hook with same filename", async () => {
+      await mkdir(`${testShakaHome}/customizations/hooks`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/customizations/hooks/session-start.ts`,
+        `export const TRIGGER = ["prompt.submit"] as const;`,
+      );
+
+      const hooks = await discoverAllHooks(testShakaHome);
+      // System session-start.ts (session.start) replaced by custom (prompt.submit)
+      expect(hooks).toHaveLength(1);
+      expect(hooks[0]?.event).toBe("prompt.submit");
+      expect(hooks[0]?.path).toContain("/customizations/hooks/");
+    });
+
+    test("works when customizations/hooks/ does not exist", async () => {
+      const hooks = await discoverAllHooks(testShakaHome);
+      // Should still find system hooks without error
+      expect(hooks).toHaveLength(1);
+    });
+
+    test("works when system/hooks/ does not exist", async () => {
+      const emptyHome = "/tmp/shaka-test-empty-home";
+      await rm(emptyHome, { recursive: true, force: true });
+      await mkdir(emptyHome, { recursive: true });
+
+      const hooks = await discoverAllHooks(emptyHome);
+      expect(hooks).toEqual([]);
+
+      await rm(emptyHome, { recursive: true, force: true });
     });
   });
 });

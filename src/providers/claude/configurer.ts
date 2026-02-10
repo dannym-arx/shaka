@@ -2,7 +2,7 @@
  * Claude Code provider configuration.
  * Installs hooks in ~/.claude/settings.json.
  *
- * Hooks are discovered from ${shakaHome}/system/hooks/*.ts
+ * Hooks are discovered from ${shakaHome}/system/hooks/*.ts and ${shakaHome}/customizations/hooks/*.ts
  * Each hook declares its trigger event via: TRIGGER: EventName
  */
 
@@ -11,7 +11,7 @@ import {
   type DiscoveredHook,
   type HookEvent,
   SHAKA_TO_CLAUDE_EVENT,
-  discoverHooks,
+  discoverAllHooks,
 } from "../hook-discovery";
 import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
 
@@ -43,7 +43,9 @@ interface ClaudeSettings {
  * Identifies Shaka hooks by their command path containing the shaka hooks directory.
  */
 function isShakaHookEntry(entry: ClaudeHookEntry): boolean {
-  return entry.hooks.some((h) => h.command.includes("/system/hooks/"));
+  return entry.hooks.some(
+    (h) => h.command.includes("/system/hooks/") || h.command.includes("/customizations/hooks/"),
+  );
 }
 
 /**
@@ -149,11 +151,16 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
         settings.hooks = {};
       }
 
-      const hooksDir = `${config.shakaHome}/system/hooks`;
-      const discoveredHooks = await discoverHooks(hooksDir);
+      // Remove existing shaka hooks before re-registering (ensures removed hooks are cleaned up)
+      for (const eventName of Object.keys(settings.hooks)) {
+        const eventHooks = settings.hooks[eventName];
+        if (Array.isArray(eventHooks)) {
+          settings.hooks[eventName] = eventHooks.filter((h) => !isShakaHookEntry(h));
+        }
+      }
 
+      const discoveredHooks = await discoverAllHooks(config.shakaHome);
       const hooksByEvent = groupHooksByEvent(discoveredHooks);
-
       this.registerAllHooks(settings, hooksByEvent);
 
       await this.saveSettings(settings);

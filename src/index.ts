@@ -122,6 +122,7 @@ import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
 import { createMcpCommand } from "./commands/mcp";
 import { createMemoryCommand } from "./commands/memory";
+import { createReloadHooksCommand } from "./commands/reload-hooks";
 import { createUninstallCommand } from "./commands/uninstall";
 import { createUpdateCommand } from "./commands/update";
 import { getCurrentVersion } from "./domain/version";
@@ -135,6 +136,7 @@ if (import.meta.main) {
   program.addCommand(createInitCommand());
   program.addCommand(createUpdateCommand());
   program.addCommand(createUninstallCommand());
+  program.addCommand(createReloadHooksCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createMcpCommand());
   program.addCommand(createMemoryCommand());

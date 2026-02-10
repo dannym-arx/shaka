@@ -8,14 +8,14 @@
  *
  * Shaka installs to the global path so the plugin works from any directory.
  *
- * Hooks are discovered from ${shakaHome}/system/hooks/*.ts
+ * Hooks are discovered from ${shakaHome}/system/hooks/*.ts and ${shakaHome}/customizations/hooks/*.ts
  * The generated plugin calls hooks via subprocess to maintain compatibility.
  */
 
 import { mkdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { type Result, err, ok } from "../../domain/result";
-import { type DiscoveredHook, discoverHooks } from "../hook-discovery";
+import { type DiscoveredHook, discoverAllHooks } from "../hook-discovery";
 import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
 
 /** Resolve the global opencode config directory (XDG-compliant). */
@@ -45,9 +45,8 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
       const pluginsDir = `${this.opencodeConfigDir}/plugins`;
       await mkdir(pluginsDir, { recursive: true });
 
-      // Discover hooks
-      const hooksDir = `${config.shakaHome}/system/hooks`;
-      const hooks = await discoverHooks(hooksDir);
+      // Discover hooks from system/ and customizations/
+      const hooks = await discoverAllHooks(config.shakaHome);
 
       // Generate plugin
       const pluginPath = `${pluginsDir}/shaka.ts`;
