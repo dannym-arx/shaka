@@ -1,0 +1,88 @@
+# Changelog
+
+All notable changes to Shaka are documented in this file.
+
+Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+## [0.2.1] — 2026-02-10
+
+### Added
+
+- **`shaka reload-hooks` command** — Re-discovers hooks and regenerates provider configurations without running full init
+- **Customization hook support** — Hooks in `customizations/hooks/` are now discovered alongside system hooks
+- **Hook override by filename** — A customization hook with the same filename as a system hook replaces it (e.g., `customizations/hooks/session-start.ts` overrides `system/hooks/session-start.ts`)
+- **Template-skip logic** — Session-start hook skips unmodified plain-markdown user files (goals.md, missions.md, etc.) to save context tokens. Eta-sourced files (user.md, assistant.md) are always included since they contain configured identity info.
+
+### Fixed
+
+- **Stale hook cleanup** — Claude configurer now removes old Shaka hook entries before re-registering, so deleted hooks don't persist in `settings.json`
+
+## [0.2.0] — 2026-02-09
+
+### Added
+
+- **Session memory system** — Full transcript-to-summary pipeline
+  - Transcript parsers for both Claude Code (JSONL) and opencode (JSON) formats
+  - Summarization via AI inference with structured prompt builder and output parser
+  - Summary storage as markdown files with JSON index for fast lookup
+  - Recent session summaries loaded into context at session start
+- **`session-end` hook** — Parses transcripts and generates session summaries on conversation end
+- **`memory-search` MCP tool** — Search session summaries by keyword, exposed via MCP server
+- **`shaka memory search` CLI command** — Search summaries from the command line
+- **opencode session.end support** — Wired session end handling into the generated opencode plugin
+
+### Changed
+
+- Hook event system expanded with `session.end` and `tool.after` events
+- Domain types extended with `SessionEndEvent` and `ToolAfterEvent`
+
+## [0.1.3] — 2026-02-08
+
+### Fixed
+
+- Hardened update/init/doctor flows — fixed detached HEAD handling, version comparison, provider persistence, and config-aware re-init
+- CI now runs `just check` (typecheck + lint + tests)
+
+## [0.1.2] — 2026-02-08
+
+### Fixed
+
+- Init now persists provider selection to config and respects it during update and doctor
+
+## [0.1.1] — 2026-02-08
+
+### Changed
+
+- Updated base reasoning framework from upstream v0.3.x assessment
+
+## [0.1.0] — 2026-02-08
+
+Initial release. Core infrastructure for a provider-agnostic AI assistant framework.
+
+### Added
+
+- **Hook system** — SessionStart, PreToolUse, PostToolUse, UserPromptSubmit events with TypeScript hooks
+- **Provider support** — Claude Code (subprocess hooks + MCP tools) and opencode (in-process plugin) as first-class providers
+- **Init / upgrade / uninstall CLI** — `shaka init`, `shaka update`, `shaka uninstall` with tag-based releases
+- **Config system** — JSON config with validation, override support, provider detection
+- **MCP server** — `shaka mcp serve` exposes tools to Claude Code via stdio
+- **Security validation** — Bash command and file path validation via PreToolUse hook with YAML patterns
+- **Base reasoning framework** — 7-phase algorithm loaded at session start
+- **Customization overrides** — `customizations/` directory overrides `system/` counterparts
+- **Skills** — 5 markdown-based skills: BeCreative, Council, RedTeam, Science, FirstPrinciples
+- **Agents** — 12 markdown agent definitions
+- **Doctor command** — `shaka doctor` for installation health checks
+- **Inference tool** — Provider-agnostic AI inference via CLI wrappers
+- **Provider selection prompt** — Interactive provider selection during init with `--claude`/`--opencode`/`--all` flags
+- **Identity configuration** — Principal and assistant name prompts during init
+- **E2E tests** — Docker-based end-to-end tests for both providers
+- **Unit tests** — 200+ tests covering core logic
+
+[0.2.1]: https://github.com/jgmontoya/shaka/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/jgmontoya/shaka/compare/v0.1.3...v0.2.0
+[0.1.3]: https://github.com/jgmontoya/shaka/compare/v0.1.2...v0.1.3
+[0.1.2]: https://github.com/jgmontoya/shaka/compare/v0.1.1...v0.1.2
+[0.1.1]: https://github.com/jgmontoya/shaka/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/jgmontoya/shaka/releases/tag/v0.1.0
