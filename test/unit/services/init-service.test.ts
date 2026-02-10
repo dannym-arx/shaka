@@ -245,7 +245,7 @@ describe("InitService", () => {
       }
 
       const content = await Bun.file(`${testHome}/config.json`).json();
-      expect(content.version).toBe("0.1.3");
+      expect(content.version).toBe("0.2.0");
     });
 
     test("creates config.json with personalized names", async () => {
@@ -357,7 +357,7 @@ describe("InitService", () => {
       if (result.ok) {
         expect(result.value.providers.claude.detected).toBe(true);
         expect(result.value.providers.claude.installed).toBe(true);
-        expect(result.value.currentVersion).toBe("0.1.3");
+        expect(result.value.currentVersion).toBe("0.2.0");
         expect(result.value.directories.length).toBeGreaterThan(0);
         expect(result.value.files.length).toBeGreaterThan(0);
       }
@@ -381,7 +381,7 @@ describe("InitService", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.currentVersion).toBe("0.1.3");
+        expect(result.value.currentVersion).toBe("0.2.0");
       }
     });
 
@@ -450,7 +450,7 @@ describe("InitService", () => {
 
       // User customizes a file
       await Bun.write(`${testHome}/user/user.md`, "# Custom content");
-      await Bun.write(`${testHome}/config.json`, '{"version":"0.1.3","custom":true}');
+      await Bun.write(`${testHome}/config.json`, '{"version":"0.2.0","custom":true}');
 
       // Re-init
       const result = await service.init();

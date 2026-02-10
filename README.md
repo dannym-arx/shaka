@@ -4,27 +4,27 @@ A personal AI assistant framework. Provider-agnostic. Clear architecture. Your d
 
 ## Status
 
-**v0.1.3** — Core infrastructure is working. Shaka can set up your environment, inject context into your AI sessions, validate tool usage for security, and work with both Claude Code and opencode.
+**v0.2.0** — Core infrastructure plus session memory. Shaka sets up your environment, injects context into AI sessions, validates tool usage for security, summarizes sessions for cross-session memory, and works with both Claude Code and opencode.
 
-| Area                       | Status  | Notes                                                            |
-| -------------------------- | ------- | ---------------------------------------------------------------- |
-| Hook system                | Done    | SessionStart, PreToolUse, UserPromptSubmit                       |
-| Provider support           | Done    | Claude Code + opencode, both first-class                         |
-| Init / upgrade / uninstall | Done    | Tag-based releases, safe upgrades                                |
-| Config system              | Done    | JSON config with validation and override support                 |
-| MCP server                 | Done    | Claude Code tool integration via stdio                           |
-| Security validation        | Done    | Bash command + file path validation via hooks                    |
-| Base reasoning framework   | Done    | 7-phase algorithm loaded at session start                        |
-| Customization overrides    | Done    | `customizations/` overrides `system/`                            |
-| Skills (markdown)          | Done    | 5 skills: BeCreative, Council, RedTeam, Science, FirstPrinciples |
-| Agents (markdown)          | Done    | 12 agent definitions                                             |
-| Doctor command             | Done    | Health checks for installation                                   |
-| Tests                      | Done    | 200+ unit tests, Docker-based E2E                                |
-| Tools                      | Minimal | Only `inference.ts`; tool type system not yet built              |
-| Memory                     | Partial | Directory structure + security logging; no search/retrieval      |
-| TUI                        | Planned | No interactive terminal UI yet                                   |
-| Session management         | Planned | No persistent sessions yet                                       |
-| Slash commands             | Planned | No `/commit`, `/diff` style commands yet                         |
+| Area                       | Status  | Notes                                                                        |
+| -------------------------- | ------- | ---------------------------------------------------------------------------- |
+| Hook system                | Done    | SessionStart, SessionEnd, PreToolUse, PostToolUse, UserPromptSubmit          |
+| Provider support           | Done    | Claude Code + opencode, both first-class                                     |
+| Init / upgrade / uninstall | Done    | Tag-based releases, safe upgrades                                            |
+| Config system              | Done    | JSON config with validation and override support                             |
+| MCP server                 | Done    | Claude Code tool integration via stdio                                       |
+| Security validation        | Done    | Bash command + file path validation via hooks                                |
+| Base reasoning framework   | Done    | 7-phase algorithm loaded at session start                                    |
+| Customization overrides    | Done    | `customizations/` overrides `system/`                                        |
+| Skills (markdown)          | Done    | 5 skills: BeCreative, Council, RedTeam, Science, FirstPrinciples             |
+| Agents (markdown)          | Done    | 12 agent definitions                                                         |
+| Doctor command             | Done    | Health checks for installation                                               |
+| Tests                      | Done    | 390+ unit tests, Docker-based E2E                                            |
+| Tools                      | Done    | `inference.ts` + `memory-search.ts`; MCP server exposes to Claude Code       |
+| Memory                     | Partial | Session summarization, transcript parsing, search via CLI + MCP (MCP server) |
+| TUI                        | Planned | No interactive terminal UI yet                                               |
+| Session management         | Planned | No persistent sessions yet                                                   |
+| Slash commands             | Planned | No `/commit`, `/diff` style commands yet                                     |
 
 ## Getting Started
 
@@ -144,8 +144,10 @@ shaka init --opencode         # Set up for opencode only
 shaka init --all              # Set up for both providers
 shaka update                  # Upgrade to latest release (tag-based)
 shaka uninstall               # Remove hooks and config
+shaka reload-hooks            # Re-discover hooks and regenerate provider configs
 shaka doctor                  # Check installation health
 shaka mcp serve               # Start MCP server (for Claude Code tool integration)
+shaka memory search <query>   # Search session summaries
 ```
 
 ### Init Flow
@@ -200,9 +202,10 @@ Shaka uses a **progressive abstraction model** where each layer builds on the pr
 
 Deterministic TypeScript functions that execute code, not prompts. Tools do the heavy lifting _before_ the LLM is involved.
 
-Currently, one tool ships with Shaka:
+Currently, two tools ship with Shaka:
 
 - **`inference.ts`** — Provider-agnostic AI inference (wraps Claude CLI or opencode CLI)
+- **`memory-search.ts`** — Search session summaries by keyword (exposed via MCP)
 
 Shaka adopts [opencode's tool format](https://opencode.ai/docs/custom-tools/) for consistency across providers. Tools are TypeScript files using the `tool()` helper:
 
@@ -287,17 +290,19 @@ Event-driven automation. TypeScript scripts that run on specific events.
 
 **Shipped hooks:**
 
-| Hook                    | Event            | What it does                                                     |
-| ----------------------- | ---------------- | ---------------------------------------------------------------- |
-| `session-start.ts`      | SessionStart     | Loads reasoning framework, user context, session metadata        |
-| `security-validator.ts` | PreToolUse       | Validates bash commands and file paths against security patterns |
-| `format-reminder.ts`    | UserPromptSubmit | Reminds the AI to follow the reasoning framework format          |
+| Hook                    | Event            | What it does                                                      |
+| ----------------------- | ---------------- | ----------------------------------------------------------------- |
+| `session-start.ts`      | SessionStart     | Loads reasoning framework, user context, recent session summaries |
+| `session-end.ts`        | SessionEnd       | Parses transcript and generates session summary for memory        |
+| `security-validator.ts` | PreToolUse       | Validates bash commands and file paths against security patterns  |
+| `format-reminder.ts`    | UserPromptSubmit | Reminds the AI to follow the reasoning framework format           |
 
 **Supported events:**
 
 | Event              | Trigger                 |
 | ------------------ | ----------------------- |
 | `SessionStart`     | New conversation begins |
+| `SessionEnd`       | Conversation ends       |
 | `PreToolUse`       | Before a tool executes  |
 | `PostToolUse`      | After a tool executes   |
 | `UserPromptSubmit` | User sends a message    |
@@ -306,19 +311,21 @@ Event-driven automation. TypeScript scripts that run on specific events.
 
 | Event           | Trigger                | Notes                                   |
 | --------------- | ---------------------- | --------------------------------------- |
-| `SessionEnd`    | Conversation ends      | Memory consolidation, cleanup           |
 | `Stop`          | Session is terminated  | Graceful shutdown, final logging        |
 | `SubagentStart` | A sub-agent is spawned | Claude Code native; opencode needs shim |
 | `SubagentStop`  | A sub-agent completes  | Claude Code native; opencode needs shim |
 
 ### Memory
 
-Persistent context that survives sessions. Currently limited to:
+Persistent context that survives sessions. The memory system captures what happened in each session so the AI can reference past work.
 
-- **Directory structure** at `~/.config/shaka/memory/`
-- **Security event logging** — the security validator writes logs to `memory/security/`
+- **Session summarization** — The `session-end` hook parses transcripts (Claude Code JSONL or opencode JSON) and generates structured summaries using AI inference
+- **Summary storage** — Summaries are stored as markdown in `memory/summaries/` with a JSON index for fast lookup
+- **Session context** — The `session-start` hook loads recent summaries into context so the AI knows what you worked on recently
+- **Search** — `shaka memory search <query>` searches summaries by keyword; also available as an MCP tool for in-session search
+- **Security event logging** — The security validator writes logs to `memory/security/`
 
-**Planned:** Semantic retrieval via vector search (likely sqlite-vec), tiered memory with importance scoring. See [PAI Memory System discussion](https://github.com/danielmiessler/Personal_AI_Infrastructure/discussions/527).
+**Planned:** Semantic retrieval via vector search (likely sqlite-vec), tiered memory with importance scoring.
 
 ## Provider Support
 
@@ -362,7 +369,6 @@ These are ideas for future development, not yet implemented:
 - **Session management** — Persistent sessions across CLI invocations (`shaka start`, `shaka resume`, `shaka sessions`)
 - **Slash commands** — `/commit`, `/diff`, `/lint` style atomic operations
 - **Single-shot CLI** — `shaka run "summarize this file"`, `shaka skill list`, `shaka tool run`
-- **Memory search** — Semantic retrieval via vector search
 - **Feature polyfills** — Subagent events and background subagents for opencode
 
 ## Development
