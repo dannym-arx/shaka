@@ -9,6 +9,7 @@
  */
 
 import { lstat, readdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { type Result, ok } from "../domain/result";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
@@ -75,7 +76,7 @@ export class UninstallService {
    * Remove system/ symlink (only if it's a symlink, never delete a real directory).
    */
   async removeSystemLink(): Promise<Result<boolean, Error>> {
-    const linkPath = `${this.shakaHome}/system`;
+    const linkPath = join(this.shakaHome, "system");
 
     try {
       const stats = await lstat(linkPath);
@@ -96,7 +97,7 @@ export class UninstallService {
    */
   async removeFrameworkFiles(): Promise<string[]> {
     const removed: string[] = [];
-    const files = [`${this.shakaHome}/config.json`];
+    const files = [join(this.shakaHome, "config.json")];
 
     for (const filePath of files) {
       try {
@@ -117,7 +118,7 @@ export class UninstallService {
    * Remove node_modules/ link at shakaHome (created by bun link shaka).
    */
   async removeNodeModulesLink(): Promise<boolean> {
-    const nmPath = `${this.shakaHome}/node_modules`;
+    const nmPath = join(this.shakaHome, "node_modules");
     try {
       await rm(nmPath, { recursive: true, force: true });
       return true;
@@ -134,7 +135,7 @@ export class UninstallService {
     const dirs = ["user", "customizations", "memory"];
 
     for (const dir of dirs) {
-      const dirPath = `${this.shakaHome}/${dir}`;
+      const dirPath = join(this.shakaHome, dir);
       try {
         const stats = await lstat(dirPath);
         if (stats.isDirectory()) {
@@ -184,7 +185,7 @@ export class UninstallService {
     // 2. Remove system/ symlink
     const symlinkResult = await this.removeSystemLink();
     if (symlinkResult.ok && symlinkResult.value) {
-      removed.push(`${this.shakaHome}/system`);
+      removed.push(join(this.shakaHome, "system"));
     }
 
     // 3. Remove framework files
@@ -194,7 +195,7 @@ export class UninstallService {
     // 4. Remove node_modules link
     const nmRemoved = await this.removeNodeModulesLink();
     if (nmRemoved) {
-      removed.push(`${this.shakaHome}/node_modules`);
+      removed.push(join(this.shakaHome, "node_modules"));
     }
 
     // 5. Optionally remove user data

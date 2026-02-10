@@ -1,12 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, readlink, rm, symlink } from "node:fs/promises";
+import { join } from "node:path";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
+import { resolveFromModule } from "../../../src/platform/paths";
 import { InitService } from "../../../src/services/init-service";
 
 describe("InitService", () => {
   const testHome = "/tmp/shaka-test-init";
-  const defaultsPath = new URL("../../../defaults", import.meta.url).pathname;
+  const defaultsPath = resolveFromModule(import.meta.url, "../../../defaults");
 
   // Mock bun link — always succeeds, never runs real bun link
   const mockBunLink = async (): Promise<Result<void, Error>> => ok(undefined);
@@ -38,12 +40,12 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.value).toContain(testHome);
-        expect(result.value).toContain(`${testHome}/user`);
-        expect(result.value).toContain(`${testHome}/memory`);
-        expect(result.value).toContain(`${testHome}/customizations`);
+        expect(result.value).toContain(join(testHome, "user"));
+        expect(result.value).toContain(join(testHome, "memory"));
+        expect(result.value).toContain(join(testHome, "customizations"));
         // system/ is NOT created here — it's a symlink
-        expect(result.value).not.toContain(`${testHome}/system`);
-        expect(result.value).not.toContain(`${testHome}/system/hooks`);
+        expect(result.value).not.toContain(join(testHome, "system"));
+        expect(result.value).not.toContain(join(testHome, "system", "hooks"));
       }
     });
 
@@ -72,12 +74,12 @@ describe("InitService", () => {
       }
 
       // Verify it's actually a symlink
-      const stats = await lstat(`${testHome}/system`);
+      const stats = await lstat(join(testHome, "system"));
       expect(stats.isSymbolicLink()).toBe(true);
 
       // Verify target is correct
-      const target = await readlink(`${testHome}/system`);
-      expect(target).toBe(`${defaultsPath}/system`);
+      const target = await readlink(join(testHome, "system"));
+      expect(target).toBe(join(defaultsPath, "system"));
     });
 
     test("is idempotent — correct symlink is no-op", async () => {
@@ -99,13 +101,13 @@ describe("InitService", () => {
       await service.createDirectories();
 
       // Create symlink to wrong target
-      await symlink("/tmp/wrong-target", `${testHome}/system`, "dir");
+      await symlink("/tmp/wrong-target", join(testHome, "system"), "dir");
 
       const result = await service.linkSystem();
 
       expect(result.ok).toBe(true);
-      const target = await readlink(`${testHome}/system`);
-      expect(target).toBe(`${defaultsPath}/system`);
+      const target = await readlink(join(testHome, "system"));
+      expect(target).toBe(join(defaultsPath, "system"));
     });
 
     test("errors if system/ is a real directory", async () => {
@@ -113,7 +115,7 @@ describe("InitService", () => {
       await service.createDirectories();
 
       // Create real directory
-      await mkdir(`${testHome}/system`, { recursive: true });
+      await mkdir(join(testHome, "system"), { recursive: true });
 
       const result = await service.linkSystem();
 
@@ -146,11 +148,11 @@ describe("InitService", () => {
 
       await service.copyUserTemplates();
 
-      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      const userContent = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(userContent).toContain("**Name:** Chief");
       expect(userContent).not.toContain("<%=");
 
-      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
+      const assistantContent = await Bun.file(join(testHome, "user", "assistant.md")).text();
       expect(assistantContent).toContain("**Name:** Shaka");
       expect(assistantContent).not.toContain("<%=");
     });
@@ -164,10 +166,10 @@ describe("InitService", () => {
         assistantName: "Alfred",
       });
 
-      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      const userContent = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(userContent).toContain("**Name:** Master Bruce");
 
-      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
+      const assistantContent = await Bun.file(join(testHome, "user", "assistant.md")).text();
       expect(assistantContent).toContain("**Name:** Alfred");
       // Verify name substitution in examples too
       expect(assistantContent).toContain("Alfred found the issue");
@@ -181,10 +183,10 @@ describe("InitService", () => {
       await service.copyUserTemplates();
 
       // Output should be .md, not .eta
-      expect(await Bun.file(`${testHome}/user/user.md`).exists()).toBe(true);
-      expect(await Bun.file(`${testHome}/user/assistant.md`).exists()).toBe(true);
-      expect(await Bun.file(`${testHome}/user/user.md.eta`).exists()).toBe(false);
-      expect(await Bun.file(`${testHome}/user/assistant.md.eta`).exists()).toBe(false);
+      expect(await Bun.file(join(testHome, "user", "user.md")).exists()).toBe(true);
+      expect(await Bun.file(join(testHome, "user", "assistant.md")).exists()).toBe(true);
+      expect(await Bun.file(join(testHome, "user", "user.md.eta")).exists()).toBe(false);
+      expect(await Bun.file(join(testHome, "user", "assistant.md.eta")).exists()).toBe(false);
     });
 
     test("does not overwrite existing user files", async () => {
@@ -193,7 +195,7 @@ describe("InitService", () => {
 
       // Create an existing user file
       const customContent = "# My custom about me";
-      await Bun.write(`${testHome}/user/user.md`, customContent);
+      await Bun.write(join(testHome, "user", "user.md"), customContent);
 
       const result = await service.copyUserTemplates();
 
@@ -206,7 +208,7 @@ describe("InitService", () => {
       }
 
       // Verify existing file was NOT overwritten
-      const content = await Bun.file(`${testHome}/user/user.md`).text();
+      const content = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(content).toBe(customContent);
     });
 
@@ -215,8 +217,8 @@ describe("InitService", () => {
       await service.createDirectories();
 
       // Simulate existing installation with some user files
-      await Bun.write(`${testHome}/user/user.md`, "existing");
-      await Bun.write(`${testHome}/user/goals.md`, "existing");
+      await Bun.write(join(testHome, "user", "user.md"), "existing");
+      await Bun.write(join(testHome, "user", "goals.md"), "existing");
 
       const result = await service.copyUserTemplates();
 
@@ -241,10 +243,10 @@ describe("InitService", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toContain(`${testHome}/config.json`);
+        expect(result.value).toContain(join(testHome, "config.json"));
       }
 
-      const content = await Bun.file(`${testHome}/config.json`).json();
+      const content = await Bun.file(join(testHome, "config.json")).json();
       expect(content.version).toBe("0.2.2");
     });
 
@@ -259,10 +261,10 @@ describe("InitService", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).toContain(`${testHome}/config.json`);
+        expect(result.value).toContain(join(testHome, "config.json"));
       }
 
-      const content = await Bun.file(`${testHome}/config.json`).json();
+      const content = await Bun.file(join(testHome, "config.json")).json();
       expect(content.principal.name).toBe("Master Bruce");
       expect(content.assistant.name).toBe("Alfred");
     });
@@ -272,16 +274,16 @@ describe("InitService", () => {
       await service.createDirectories();
 
       const existingContent = '{"version": "custom"}';
-      await Bun.write(`${testHome}/config.json`, existingContent);
+      await Bun.write(join(testHome, "config.json"), existingContent);
 
       const result = await service.copyDefaultConfig();
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value).not.toContain(`${testHome}/config.json`);
+        expect(result.value).not.toContain(join(testHome, "config.json"));
       }
 
-      const content = await Bun.file(`${testHome}/config.json`).text();
+      const content = await Bun.file(join(testHome, "config.json")).text();
       expect(content).toBe(existingContent);
     });
 
@@ -290,7 +292,7 @@ describe("InitService", () => {
       await service.createDirectories();
 
       await Bun.write(
-        `${testHome}/config.json`,
+        join(testHome, "config.json"),
         '{"version":"0.1.0","principal":{"name":"Old"},"assistant":{"name":"Old"}}',
       );
 
@@ -302,10 +304,10 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         // Not listed as created (file already existed)
-        expect(result.value).not.toContain(`${testHome}/config.json`);
+        expect(result.value).not.toContain(join(testHome, "config.json"));
       }
 
-      const content = await Bun.file(`${testHome}/config.json`).json();
+      const content = await Bun.file(join(testHome, "config.json")).json();
       expect(content.principal.name).toBe("New");
       expect(content.assistant.name).toBe("New");
     });
@@ -363,14 +365,14 @@ describe("InitService", () => {
       }
 
       // Verify system symlink exists
-      const stats = await lstat(`${testHome}/system`);
+      const stats = await lstat(join(testHome, "system"));
       expect(stats.isSymbolicLink()).toBe(true);
 
       // Verify user templates were copied
-      expect(await Bun.file(`${testHome}/user/user.md`).exists()).toBe(true);
+      expect(await Bun.file(join(testHome, "user", "user.md")).exists()).toBe(true);
 
       // Verify config was copied
-      expect(await Bun.file(`${testHome}/config.json`).exists()).toBe(true);
+      expect(await Bun.file(join(testHome, "config.json")).exists()).toBe(true);
     });
 
     test("is idempotent — re-init succeeds", async () => {
@@ -449,8 +451,8 @@ describe("InitService", () => {
       await service.init();
 
       // User customizes a file
-      await Bun.write(`${testHome}/user/user.md`, "# Custom content");
-      await Bun.write(`${testHome}/config.json`, '{"version":"0.2.2","custom":true}');
+      await Bun.write(join(testHome, "user", "user.md"), "# Custom content");
+      await Bun.write(join(testHome, "config.json"), '{"version":"0.2.2","custom":true}');
 
       // Re-init
       const result = await service.init();
@@ -458,11 +460,11 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
 
       // User file preserved
-      const aboutMe = await Bun.file(`${testHome}/user/user.md`).text();
+      const aboutMe = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(aboutMe).toBe("# Custom content");
 
       // Config preserved
-      const config = await Bun.file(`${testHome}/config.json`).json();
+      const config = await Bun.file(join(testHome, "config.json")).json();
       expect(config.custom).toBe(true);
     });
 
@@ -479,14 +481,14 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
 
       // User templates rendered with names
-      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      const userContent = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(userContent).toContain("**Name:** Master Bruce");
 
-      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
+      const assistantContent = await Bun.file(join(testHome, "user", "assistant.md")).text();
       expect(assistantContent).toContain("**Name:** Alfred");
 
       // Config has personalized names
-      const config = await Bun.file(`${testHome}/config.json`).json();
+      const config = await Bun.file(join(testHome, "config.json")).json();
       expect(config.principal.name).toBe("Master Bruce");
       expect(config.assistant.name).toBe("Alfred");
     });
@@ -499,14 +501,14 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
 
       // User templates rendered with defaults
-      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      const userContent = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(userContent).toContain("**Name:** Chief");
 
-      const assistantContent = await Bun.file(`${testHome}/user/assistant.md`).text();
+      const assistantContent = await Bun.file(join(testHome, "user", "assistant.md")).text();
       expect(assistantContent).toContain("**Name:** Shaka");
 
       // Config has default names
-      const config = await Bun.file(`${testHome}/config.json`).json();
+      const config = await Bun.file(join(testHome, "config.json")).json();
       expect(config.principal.name).toBe("Chief");
       expect(config.assistant.name).toBe("Shaka");
     });
@@ -523,7 +525,7 @@ describe("InitService", () => {
       });
 
       // Verify initial state
-      const initialConfig = await Bun.file(`${testHome}/config.json`).json();
+      const initialConfig = await Bun.file(join(testHome, "config.json")).json();
       expect(initialConfig.principal.name).toBe("Master Bruce");
 
       // Re-init with different names — config names should update
@@ -534,12 +536,12 @@ describe("InitService", () => {
       expect(result.ok).toBe(true);
 
       // Config names updated
-      const config = await Bun.file(`${testHome}/config.json`).json();
+      const config = await Bun.file(join(testHome, "config.json")).json();
       expect(config.principal.name).toBe("Other");
       expect(config.assistant.name).toBe("Bot");
 
       // User templates preserved from first init (not overwritten)
-      const userContent = await Bun.file(`${testHome}/user/user.md`).text();
+      const userContent = await Bun.file(join(testHome, "user", "user.md")).text();
       expect(userContent).toContain("**Name:** Master Bruce");
     });
   });
