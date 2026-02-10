@@ -6,6 +6,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 
 ## [Unreleased]
 
+### Added
+
+- **`shaka config get/set` commands** — Get and set configuration values from the CLI using dot-notation paths (e.g., `shaka config get providers.opencode.enabled`, `shaka config set providers.opencode.summarization_model=openrouter/anthropic/claude-haiku-4.5`)
+- **Destructive overwrite protection** — `config set` prevents accidentally replacing objects with primitives (e.g., setting `providers.claude=foo` when it contains multiple keys)
+- **opencode summarization model hint** — After `shaka init`, `shaka doctor`, or `shaka update`, displays a hint suggesting users configure a specific summarization model
+
 ### Fixed
 
 - **`shaka update` works from any directory** — Repo root now resolved via `import.meta.url` instead of `git rev-parse` from cwd, so update no longer requires running from inside the shaka repo

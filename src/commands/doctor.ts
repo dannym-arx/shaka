@@ -7,6 +7,7 @@ import { Command } from "commander";
 import { type ShakaConfig, loadConfig, resolveShakaHome } from "../domain/config";
 import { getAllProviders } from "../providers/registry";
 import type { HookVerificationResult, ProviderConfigurer, ProviderName } from "../providers/types";
+import { printOpencodeSummarizationHint } from "./hints";
 
 async function checkShakaHome(shakaHome: string): Promise<boolean> {
   console.log(`Shaka home: ${shakaHome}`);
@@ -191,5 +192,6 @@ export function createDoctorCommand(): Command {
       }
 
       printSummary(hasIssues);
+      await printOpencodeSummarizationHint(shakaHome);
     });
 }

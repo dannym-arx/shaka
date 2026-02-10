@@ -14,6 +14,7 @@ import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
 import { type InitResult, InitService, type Personalization } from "../services/init-service";
 import { type DetectedProviders, detectInstalledProviders } from "../services/provider-detection";
+import { printOpencodeSummarizationHint } from "./hints";
 
 const PROVIDER_LABELS: Record<ProviderName, string> = {
   claude: "Claude Code",
@@ -255,5 +256,6 @@ export function createInitCommand(): Command {
       await installProviderHooks(result.value.providers, shakaHome);
       logCreatedItems(result.value);
       await logVersionInfo(result.value);
+      await printOpencodeSummarizationHint(shakaHome);
     });
 }

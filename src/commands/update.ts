@@ -10,7 +10,7 @@
 
 import { createInterface } from "node:readline";
 import { Command } from "commander";
-import { loadConfig } from "../domain/config";
+import { loadConfig, resolveShakaHome } from "../domain/config";
 import {
   compareSemver,
   findLatestTag,
@@ -18,6 +18,7 @@ import {
   isMajorUpgrade,
   parseSemver,
 } from "../domain/version";
+import { printOpencodeSummarizationHint } from "./hints";
 
 interface UpdateInfo {
   localVersion: string;
@@ -165,5 +166,12 @@ export function createUpdateCommand(): Command {
       if (!success) process.exit(1);
 
       console.log(`\n✅ Shaka updated: v${info.localVersion} → v${info.latestVersion}`);
+
+      const shakaHome = resolveShakaHome({
+        SHAKA_HOME: process.env.SHAKA_HOME,
+        XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
+        HOME: process.env.HOME,
+      });
+      await printOpencodeSummarizationHint(shakaHome);
     });
 }
