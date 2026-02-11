@@ -4,6 +4,26 @@ All notable changes to Shaka are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Windows support** — Shaka now runs on Windows alongside macOS and Linux
+  - Cross-platform path utilities (`src/platform/paths.ts`) with `readSymlinkTarget()` and `removeLink()` helpers
+  - Junctions instead of directory symlinks for zero-privilege Windows support (no Developer Mode or admin required)
+  - `Bun.which()` for cross-platform executable lookup in provider detection
+  - `USERPROFILE` fallback for home directory resolution on Windows
+  - `.gitattributes` for consistent line endings across platforms
+- **Windows CI** — GitHub Actions matrix now includes Windows
+
+### Changed
+
+- **All path construction uses `path.join()`** — Replaced hardcoded `/` separators across `src/` modules, `defaults/` hooks, providers, configurers, and tests
+- **`pathToFileURL()` for dynamic imports** — Bare Windows paths (`C:\...`) fail with `import()`, now converted to `file://` URLs
+- **Security pattern matching is cross-platform** — Path patterns normalize separators before matching
+- **Uninstall shows platform-appropriate cleanup command** — Displays the correct shell command for the user's OS
+- **Tests use `os.tmpdir()` and `path.join()`** — All test temp directories are now cross-platform
+
 ## [0.2.2] — 2026-02-11
 
 ### Added
@@ -102,7 +122,8 @@ Initial release. Core infrastructure for a provider-agnostic AI assistant framew
 - **E2E tests** — Docker-based end-to-end tests for both providers
 - **Unit tests** — 200+ tests covering core logic
 
-[0.2.2]: https://github.com/jgmontoya/shaka/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jgmontoya/shaka/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/jgmontoya/shaka/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jgmontoya/shaka/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/jgmontoya/shaka/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/jgmontoya/shaka/compare/v0.1.2...v0.1.3
