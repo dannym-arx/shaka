@@ -47,7 +47,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
       const hooks = await discoverAllHooks(config.shakaHome);
 
       // Generate plugin
-      const pluginPath = `${pluginsDir}/shaka.ts`;
+      const pluginPath = join(pluginsDir, "shaka.ts");
       const pluginContent = this.generatePluginContent(config, hooks);
       await Bun.write(pluginPath, pluginContent);
 

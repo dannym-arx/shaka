@@ -47,7 +47,7 @@ export function parseClaudeCodeTranscript(jsonlContent: string): NormalizedMessa
   const linesByUuid = new Map<string, ClaudeLine>();
   const orderedUuids: string[] = [];
 
-  for (const line of jsonlContent.split("\n")) {
+  for (const line of jsonlContent.split(/\r?\n/)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
 

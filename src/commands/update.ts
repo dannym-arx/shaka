@@ -10,6 +10,7 @@
 
 import { createInterface } from "node:readline";
 import { Command } from "commander";
+import { resolveFromModule } from "../platform/paths";
 import { loadConfig, resolveShakaHome } from "../domain/config";
 import {
   compareSemver,
@@ -37,7 +38,7 @@ async function run(args: string[], cwd: string): Promise<{ stdout: string; ok: b
 function getRepoRoot(): string {
   // Resolve from this file's location — works regardless of cwd.
   // src/commands/update.ts → ../../ = repo root
-  return new URL("../..", import.meta.url).pathname;
+  return resolveFromModule(import.meta.url, "../..");
 }
 
 async function checkForUpdate(repoRoot: string): Promise<UpdateInfo> {
@@ -171,6 +172,7 @@ export function createUpdateCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
       await printOpencodeSummarizationHint(shakaHome);
     });

@@ -114,7 +114,7 @@ export async function findLatestTag(repoRoot: string): Promise<string | null> {
   const output = await git(["tag", "-l", "v*.*.*", "--sort=-version:refname"], repoRoot);
   if (!output) return null;
 
-  for (const tag of output.split("\n")) {
+  for (const tag of output.split(/\r?\n/)) {
     if (parseSemver(stripV(tag))) return tag;
   }
 
