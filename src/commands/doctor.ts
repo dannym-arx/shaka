@@ -210,6 +210,7 @@ export function createDoctorCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
 
       let hasIssues = await checkShakaHome(shakaHome);
