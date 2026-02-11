@@ -28,11 +28,21 @@ export function expandPath(path: string): string {
 }
 
 /**
+ * Normalize path separators to forward slashes for consistent matching.
+ * Ensures Windows backslash paths match the same patterns as Unix paths.
+ */
+function normalizeSeparators(p: string): string {
+  return p.replace(/\\/g, "/");
+}
+
+/**
  * Test if a file path matches a pattern (supports ~ and * globs).
+ * Normalizes path separators to `/` before matching so patterns work
+ * identically on Windows and Unix.
  */
 export function matchesPathPattern(filePath: string, pattern: string): boolean {
-  const expandedPattern = expandPath(pattern);
-  const expandedPath = expandPath(filePath);
+  const expandedPattern = normalizeSeparators(expandPath(pattern));
+  const expandedPath = normalizeSeparators(expandPath(filePath));
 
   if (pattern.includes("*")) {
     // Convert glob to regex

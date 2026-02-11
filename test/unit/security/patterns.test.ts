@@ -100,4 +100,24 @@ describe("matchesPathPattern", () => {
       expect(matchesPathPattern(`${homedir}/.ssh/id_rsa`, "~/.ssh/id_*")).toBe(true);
     });
   });
+
+  describe("Windows backslash paths", () => {
+    test("matches backslash path against forward-slash pattern", () => {
+      expect(matchesPathPattern("C:\\Users\\test\\file.txt", "C:/Users/*/file.txt")).toBe(true);
+    });
+
+    test("matches backslash path against double-star pattern", () => {
+      expect(
+        matchesPathPattern("C:\\Users\\test\\deep\\credentials.json", "**/credentials.json"),
+      ).toBe(true);
+    });
+
+    test("matches backslash path with exact prefix", () => {
+      expect(matchesPathPattern("C:\\etc\\nginx\\nginx.conf", "C:/etc")).toBe(true);
+    });
+
+    test("does not false-match partial directory with backslashes", () => {
+      expect(matchesPathPattern("C:\\etcpasswd", "C:/etc")).toBe(false);
+    });
+  });
 });
