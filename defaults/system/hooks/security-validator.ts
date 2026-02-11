@@ -15,6 +15,7 @@
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   type PatternsConfig,
   type ValidationResult,
@@ -56,8 +57,8 @@ function loadPatterns(shakaHome: string): PatternsConfig {
   if (patternsCache) return patternsCache;
 
   // Try customizations first, then system
-  const customPath = `${shakaHome}/customizations/security/patterns.yaml`;
-  const systemPath = `${shakaHome}/system/security/patterns.yaml`;
+  const customPath = join(shakaHome, "customizations", "security", "patterns.yaml");
+  const systemPath = join(shakaHome, "system", "security", "patterns.yaml");
 
   const patternsPath = existsSync(customPath)
     ? customPath
@@ -85,13 +86,13 @@ function logSecurityEvent(shakaHome: string, event: SecurityEvent): void {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, "0");
 
-    const logDir = `${shakaHome}/memory/security/${year}/${month}`;
+    const logDir = join(shakaHome, "memory", "security", String(year), month);
     if (!existsSync(logDir)) {
       mkdirSync(logDir, { recursive: true });
     }
 
     const timestamp = now.toISOString().replace(/[:.]/g, "-");
-    const logPath = `${logDir}/security-${event.event_type}-${timestamp}.json`;
+    const logPath = join(logDir, `security-${event.event_type}-${timestamp}.json`);
 
     writeFileSync(logPath, JSON.stringify(event, null, 2));
   } catch {

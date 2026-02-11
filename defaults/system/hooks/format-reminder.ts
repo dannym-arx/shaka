@@ -12,6 +12,7 @@
  * - Inference: imported from shaka package
  */
 
+import { join } from "node:path";
 import { Eta } from "eta";
 import { getAssistantName, inference, isSubagent, resolveShakaHome } from "shaka";
 import { parse as parseYaml } from "yaml";
@@ -24,7 +25,7 @@ const SHAKA_HOME = resolveShakaHome();
 
 // Initialize Eta with templates directory
 const eta = new Eta({
-  views: `${SHAKA_HOME}/system/templates`,
+  views: join(SHAKA_HOME, "system", "templates"),
   cache: true,
 });
 
@@ -93,12 +94,12 @@ async function discoverCapabilities(): Promise<Capability[]> {
   if (capabilitiesCache) return capabilitiesCache;
 
   const capabilities = new Map<string, Capability>();
-  const agentsDir = `${SHAKA_HOME}/agents`;
+  const agentsDir = join(SHAKA_HOME, "agents");
 
   try {
     const glob = new Bun.Glob("*.md");
     for await (const file of glob.scan({ cwd: agentsDir })) {
-      const content = await Bun.file(`${agentsDir}/${file}`).text();
+      const content = await Bun.file(join(agentsDir, file)).text();
       const meta = parseFrontmatter(content) as AgentMeta | null;
 
       if (meta?.capability && meta?.name) {
@@ -135,12 +136,12 @@ async function discoverThinkingTools(): Promise<ThinkingTool[]> {
   if (thinkingToolsCache) return thinkingToolsCache;
 
   const tools: ThinkingTool[] = [];
-  const skillsDir = `${SHAKA_HOME}/skills`;
+  const skillsDir = join(SHAKA_HOME, "skills");
 
   try {
     const glob = new Bun.Glob("*/SKILL.md");
     for await (const file of glob.scan({ cwd: skillsDir })) {
-      const content = await Bun.file(`${skillsDir}/${file}`).text();
+      const content = await Bun.file(join(skillsDir, file)).text();
       const meta = parseFrontmatter(content) as ThinkingToolMeta | null;
 
       // Only include skills that have key and include_when (thinking tools)

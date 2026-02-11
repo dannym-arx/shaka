@@ -5,6 +5,7 @@
  * Outputs additionalContext for the session.
  */
 
+import { join } from "node:path";
 import {
   getAssistantName,
   getPrincipalName,
@@ -36,10 +37,10 @@ const MAX_MEMORY_CHARS = 5000;
 async function resolveDefaultsUserDir(shakaHome: string): Promise<string | null> {
   try {
     const { readlink } = await import("node:fs/promises");
-    const systemTarget = await readlink(`${shakaHome}/system`);
+    const systemTarget = await readlink(join(shakaHome, "system"));
     // systemTarget is e.g. /path/to/shaka/defaults/system
     // defaults/user/ is at ../user relative to that
-    return `${systemTarget}/../user`;
+    return join(systemTarget, "..", "user");
   } catch {
     return null;
   }
@@ -60,7 +61,7 @@ async function isUnmodifiedTemplate(
   filename: string,
   defaultsUserDir: string,
 ): Promise<boolean> {
-  const templatePath = `${defaultsUserDir}/${filename}`;
+  const templatePath = join(defaultsUserDir, filename);
   const templateFile = Bun.file(templatePath);
   if (!(await templateFile.exists())) return false;
 
@@ -74,14 +75,14 @@ async function isUnmodifiedTemplate(
  * to avoid injecting noise tokens into the session context.
  */
 async function loadUserFiles(shakaHome: string): Promise<string[]> {
-  const userDir = `${shakaHome}/user`;
+  const userDir = join(shakaHome, "user");
   const defaultsUserDir = await resolveDefaultsUserDir(shakaHome);
   const contents: string[] = [];
 
   try {
     const glob = new Bun.Glob("*.md");
     for await (const file of glob.scan({ cwd: userDir })) {
-      const content = await Bun.file(`${userDir}/${file}`).text();
+      const content = await Bun.file(join(userDir, file)).text();
       if (!content.trim()) continue;
 
       if (defaultsUserDir && (await isUnmodifiedTemplate(content, file, defaultsUserDir))) {
@@ -104,7 +105,7 @@ async function loadUserFiles(shakaHome: string): Promise<string[]> {
  * Returns a formatted markdown section, or empty string if none available.
  */
 async function loadRecentSessions(shakaHome: string): Promise<string> {
-  const memoryDir = `${shakaHome}/memory`;
+  const memoryDir = join(shakaHome, "memory");
   const cwd = process.cwd();
 
   try {
