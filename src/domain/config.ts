@@ -184,6 +184,7 @@ export async function loadShakaFile(
   const home = shakaHome ?? resolveShakaHome();
 
   // For system files, check customization override first
+  // relativePath uses forward slashes by convention (not OS-native separators)
   if (relativePath.startsWith("system/")) {
     const basename = relativePath.replace("system/", "");
     const customPath = join(home, "customizations", basename);

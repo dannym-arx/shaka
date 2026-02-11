@@ -10,7 +10,6 @@
 
 import { createInterface } from "node:readline";
 import { Command } from "commander";
-import { resolveFromModule } from "../platform/paths";
 import { loadConfig, resolveShakaHome } from "../domain/config";
 import {
   compareSemver,
@@ -19,6 +18,7 @@ import {
   isMajorUpgrade,
   parseSemver,
 } from "../domain/version";
+import { resolveFromModule } from "../platform/paths";
 import { printOpencodeSummarizationHint } from "./hints";
 
 interface UpdateInfo {

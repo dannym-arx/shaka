@@ -6,12 +6,12 @@
  * and tracks the installed version.
  */
 
-import { lstat, mkdir, readdir, readlink, rm, symlink } from "node:fs/promises";
-import { join } from "node:path";
+import { lstat, mkdir, readdir, symlink } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { Eta } from "eta";
 import { type Result, err, ok } from "../domain/result";
 import { getCurrentVersion } from "../domain/version";
-import { resolveFromModule } from "../platform/paths";
+import { readSymlinkTarget, removeLink, resolveFromModule } from "../platform/paths";
 import {
   type DetectedProviders,
   type ProviderName,
@@ -137,34 +137,34 @@ export class InitService {
 
     try {
       let exists = false;
-      let isLink = false;
 
       try {
-        const stats = await lstat(linkPath);
+        await lstat(linkPath);
         exists = true;
-        isLink = stats.isSymbolicLink();
       } catch {
         // Does not exist — will create
       }
 
-      if (exists && !isLink) {
-        return err(
-          new Error(
-            `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`,
-          ),
-        );
-      }
-
-      if (exists && isLink) {
-        const currentTarget = await readlink(linkPath);
-        if (currentTarget === target) {
+      if (exists) {
+        // readlink works for both symlinks and Windows junctions
+        const currentTarget = await readSymlinkTarget(linkPath);
+        if (currentTarget === null) {
+          // Real directory — not a symlink/junction
+          return err(
+            new Error(
+              `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`,
+            ),
+          );
+        }
+        if (resolve(currentTarget) === resolve(target)) {
           // Already correct
           return ok(symlinks);
         }
         // Wrong target — remove and re-create
-        await rm(linkPath);
+        await removeLink(linkPath);
       }
 
+      // "junction" requires no elevated privileges on Windows; ignored on Unix
       await symlink(target, linkPath, "junction");
       symlinks.push(`${linkPath} → ${target}`);
 

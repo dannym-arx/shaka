@@ -6,8 +6,8 @@
  * `fileURLToPath()` handles this correctly on all platforms.
  */
 
+import { readlink, rm, rmdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
-export { join, sep } from "node:path";
 
 /**
  * Resolve a relative path from a module's location.
@@ -18,4 +18,35 @@ export { join, sep } from "node:path";
  */
 export function resolveFromModule(base: string, relative: string): string {
   return fileURLToPath(new URL(relative, base));
+}
+
+/**
+ * Read the target of a symlink or Windows junction.
+ * Returns the target path, or null if the path is not a symlink/junction.
+ *
+ * On Bun/Windows, `lstat().isSymbolicLink()` returns false for junctions.
+ * `readlink()` works for both symlinks and junctions, making it the
+ * reliable cross-platform way to detect symlink-like entries.
+ */
+export async function readSymlinkTarget(path: string): Promise<string | null> {
+  try {
+    return await readlink(path);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Remove a symlink or Windows junction.
+ *
+ * Plain `rm()` fails on Windows junctions because Bun treats them as
+ * directories, not symlinks. `rmdir()` correctly removes the junction
+ * reparse point without following it into the target.
+ */
+export async function removeLink(path: string): Promise<void> {
+  if (process.platform === "win32") {
+    await rmdir(path);
+  } else {
+    await rm(path);
+  }
 }

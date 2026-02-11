@@ -169,10 +169,16 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       await this.saveSettings(settings);
 
       // Install agents from defaults/system/agents/
-      await installAssetSymlink(join(config.shakaHome, "system", "agents"), join(this.claudeHome, "agents"));
+      await installAssetSymlink(
+        join(config.shakaHome, "system", "agents"),
+        join(this.claudeHome, "agents"),
+      );
 
       // Install skills from defaults/system/skills/
-      await installAssetSymlink(join(config.shakaHome, "system", "skills"), join(this.claudeHome, "skills"));
+      await installAssetSymlink(
+        join(config.shakaHome, "system", "skills"),
+        join(this.claudeHome, "skills"),
+      );
 
       return ok(undefined);
     } catch (e) {
@@ -296,8 +302,14 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       }
 
       // Remove agents and skills installed by shaka
-      await uninstallAssetSymlink(join(config.shakaHome, "system", "agents"), join(this.claudeHome, "agents"));
-      await uninstallAssetSymlink(join(config.shakaHome, "system", "skills"), join(this.claudeHome, "skills"));
+      await uninstallAssetSymlink(
+        join(config.shakaHome, "system", "agents"),
+        join(this.claudeHome, "agents"),
+      );
+      await uninstallAssetSymlink(
+        join(config.shakaHome, "system", "skills"),
+        join(this.claudeHome, "skills"),
+      );
 
       return ok(undefined);
     } catch (e) {

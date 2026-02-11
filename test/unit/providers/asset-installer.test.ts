@@ -69,10 +69,11 @@ describe("asset-installer", () => {
     });
 
     test("replaces symlink pointing to wrong target", async () => {
-      // Create symlink pointing to wrong location
+      // Create symlink pointing to wrong location (use platform-appropriate path)
+      const wrongTarget = join(tmpdir(), "shaka-test-wrong-target");
       const linkPath = `${testTargetDir}/shaka`;
       await mkdir(testTargetDir, { recursive: true });
-      await symlink("/wrong/target", linkPath, "dir");
+      await symlink(wrongTarget, linkPath, "junction");
 
       await installAssetSymlink(testSourceDir, testTargetDir);
 
@@ -85,7 +86,7 @@ describe("asset-installer", () => {
       // Create correct symlink
       const linkPath = `${testTargetDir}/shaka`;
       await mkdir(testTargetDir, { recursive: true });
-      await symlink(testSourceDir, linkPath, "dir");
+      await symlink(testSourceDir, linkPath, "junction");
 
       // Get original stats
       const originalStats = await lstat(linkPath);
@@ -101,7 +102,7 @@ describe("asset-installer", () => {
       // Create symlink without trailing slash
       const linkPath = `${testTargetDir}/shaka`;
       await mkdir(testTargetDir, { recursive: true });
-      await symlink(testSourceDir, linkPath, "dir");
+      await symlink(testSourceDir, linkPath, "junction");
 
       // Install with trailing slash — should recognize as same path
       await installAssetSymlink(`${testSourceDir}/`, testTargetDir);
@@ -115,9 +116,9 @@ describe("asset-installer", () => {
   describe("uninstallAssetSymlink", () => {
     test("removes symlink pointing to source", async () => {
       // Create symlink
-      const linkPath = `${testTargetDir}/shaka`;
+      const linkPath = join(testTargetDir, "shaka");
       await mkdir(testTargetDir, { recursive: true });
-      await symlink(testSourceDir, linkPath, "dir");
+      await symlink(testSourceDir, linkPath, "junction");
 
       await uninstallAssetSymlink(testSourceDir, testTargetDir);
 
@@ -131,17 +132,18 @@ describe("asset-installer", () => {
     });
 
     test("preserves symlink pointing elsewhere", async () => {
-      // Create symlink pointing to different location
-      const linkPath = `${testTargetDir}/shaka`;
+      // Create symlink pointing to different location (use platform-appropriate path)
+      const otherTarget = join(tmpdir(), "shaka-test-other-location");
+      const linkPath = join(testTargetDir, "shaka");
       await mkdir(testTargetDir, { recursive: true });
-      await symlink("/other/location", linkPath, "dir");
+      await symlink(otherTarget, linkPath, "junction");
 
       await uninstallAssetSymlink(testSourceDir, testTargetDir);
 
       // Symlink should still exist
       const stats = await lstat(linkPath);
       expect(stats.isSymbolicLink()).toBe(true);
-      expect(await readlink(linkPath)).toBe("/other/location");
+      expect(await readlink(linkPath)).toBe(otherTarget);
     });
 
     test("preserves real directory", async () => {

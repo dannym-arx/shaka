@@ -75,9 +75,7 @@ function logResult(result: UninstallResult, deleteUserData: boolean, shakaHome: 
   if (!deleteUserData) {
     console.log(`   Your data is still at ${shakaHome}/`);
     const removeCmd =
-      process.platform === "win32"
-        ? `rmdir /s /q "${shakaHome}"`
-        : `rm -rf ${shakaHome}`;
+      process.platform === "win32" ? `rmdir /s /q "${shakaHome}"` : `rm -rf ${shakaHome}`;
     console.log(`   To remove it: ${removeCmd}`);
   }
 }

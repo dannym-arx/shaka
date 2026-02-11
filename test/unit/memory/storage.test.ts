@@ -63,15 +63,16 @@ describe("Storage", () => {
       const summary = makeSummary();
       const filePath = await writeSummary(testMemoryDir, summary);
 
-      expect(filePath).toContain(`${testMemoryDir}/sessions/`);
+      expect(filePath).toContain(join(testMemoryDir, "sessions"));
       expect(filePath).toEndWith(".md");
       expect(await Bun.file(filePath).exists()).toBe(true);
     });
 
     test("filename is date-hash format", async () => {
+      const { basename } = await import("node:path");
       const summary = makeSummary({ sessionId: "ses-deadbeef99" });
       const filePath = await writeSummary(testMemoryDir, summary);
-      const filename = filePath.split("/").pop();
+      const filename = basename(filePath);
 
       // Format: YYYY-MM-DD-{hash8}.md
       expect(filename).toMatch(/^\d{4}-\d{2}-\d{2}-[a-f0-9]{8}\.md$/);

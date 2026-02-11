@@ -101,8 +101,8 @@ describe("InitService", () => {
       const service = createService();
       await service.createDirectories();
 
-      // Create symlink to wrong target
-      await symlink("/tmp/wrong-target", join(testHome, "system"), "dir");
+      // Create symlink to wrong target (use platform-appropriate path)
+      await symlink(join(tmpdir(), "shaka-test-wrong-target"), join(testHome, "system"), "junction");
 
       const result = await service.linkSystem();
 

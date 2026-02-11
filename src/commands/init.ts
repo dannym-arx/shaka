@@ -8,8 +8,8 @@
 import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { loadConfig, resolveShakaHome } from "../domain/config";
-import { resolveFromModule } from "../platform/paths";
 import { findNewerLocalTag, getGitRef } from "../domain/version";
+import { resolveFromModule } from "../platform/paths";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";

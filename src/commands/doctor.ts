@@ -81,7 +81,7 @@ async function collectProviderStatuses(shakaHome: string): Promise<ProviderCheck
   const results: ProviderCheckResult[] = [];
 
   for (const provider of providers) {
-    const cliInstalled = await provider.isInstalled();
+    const cliInstalled = provider.isInstalled();
     const status = await provider.checkInstallation({ shakaHome });
     results.push({ provider, cliInstalled, status });
   }
@@ -177,7 +177,7 @@ async function recheckAfterFix(shakaHome: string): Promise<boolean> {
   const providers = getAllProviders();
 
   for (const provider of providers) {
-    const cliInstalled = await provider.isInstalled();
+    const cliInstalled = provider.isInstalled();
     const status = await provider.checkInstallation({ shakaHome });
     const enabled = config?.providers[provider.name].enabled ?? false;
     if (enabled && cliInstalled && !isFullyInstalled(status)) {

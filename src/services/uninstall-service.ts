@@ -11,6 +11,7 @@
 import { lstat, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { type Result, ok } from "../domain/result";
+import { readSymlinkTarget, removeLink } from "../platform/paths";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
@@ -78,18 +79,14 @@ export class UninstallService {
   async removeSystemLink(): Promise<Result<boolean, Error>> {
     const linkPath = join(this.shakaHome, "system");
 
-    try {
-      const stats = await lstat(linkPath);
-      if (stats.isSymbolicLink()) {
-        await rm(linkPath);
-        return ok(true);
-      }
-      // Real directory — don't touch it
-      return ok(false);
-    } catch {
-      // Doesn't exist — nothing to remove
-      return ok(false);
+    // readlink works for both symlinks and Windows junctions
+    const target = await readSymlinkTarget(linkPath);
+    if (target !== null) {
+      await removeLink(linkPath);
+      return ok(true);
     }
+    // Real directory or doesn't exist — don't touch it
+    return ok(false);
   }
 
   /**

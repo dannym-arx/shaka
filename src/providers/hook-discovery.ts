@@ -12,6 +12,7 @@
 
 import { readdir } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Shaka's canonical hook event names.
@@ -53,7 +54,9 @@ interface ParsedHook {
 export async function parseHookTrigger(filePath: string): Promise<ParsedHook> {
   try {
     // Add cache-busting to ensure fresh import (important for tests and hot-reload)
-    const module = await import(`${filePath}?t=${Date.now()}`);
+    // Use file:// URL so import() works on Windows (bare paths like C:\... fail)
+    const fileUrl = `${pathToFileURL(filePath).href}?t=${Date.now()}`;
+    const module = await import(fileUrl);
     const trigger = module.TRIGGER;
     const matcher = module.MATCHER;
 

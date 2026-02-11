@@ -164,7 +164,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 ${hooks.map((h) => ` *   - ${h.filename} (${h.event}${h.matchers ? `, matchers: ${h.matchers.join(", ")}` : ""})`).join("\n")}
  */
 
-const SHAKA_HOME = "${config.shakaHome}";
+const SHAKA_HOME = ${JSON.stringify(config.shakaHome)};
 const IDLE_SUMMARY_DELAY = 15_000;
 
 interface ClaudeHookInput {
