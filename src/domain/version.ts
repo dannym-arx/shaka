@@ -2,6 +2,8 @@
  * Semver utilities and git version detection.
  */
 
+import { resolveFromModule } from "../platform/paths";
+
 export interface SemVer {
   major: number;
   minor: number;
@@ -56,7 +58,7 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 {
  * Get the current shaka version from package.json.
  */
 export function getCurrentVersion(): string {
-  const pkgPath = new URL("../../package.json", import.meta.url).pathname;
+  const pkgPath = resolveFromModule(import.meta.url, "../../package.json");
   const pkg = JSON.parse(require("node:fs").readFileSync(pkgPath, "utf-8"));
   return pkg.version;
 }

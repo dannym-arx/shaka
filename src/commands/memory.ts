@@ -3,6 +3,7 @@
  * Search and list session summaries.
  */
 
+import { join } from "node:path";
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
 import { searchMemory } from "../memory/search";
@@ -20,7 +21,7 @@ export function createMemoryCommand(): Command {
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
       });
-      const memoryDir = `${shakaHome}/memory`;
+      const memoryDir = join(shakaHome, "memory");
 
       const results = await searchMemory(query, memoryDir);
 
@@ -53,7 +54,7 @@ export function createMemoryCommand(): Command {
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
       });
-      const memoryDir = `${shakaHome}/memory`;
+      const memoryDir = join(shakaHome, "memory");
 
       const summaries = await listSummaries(memoryDir);
 

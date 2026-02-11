@@ -6,6 +6,7 @@
  */
 
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { parseSummaryOutput } from "./summarize";
 
 const MAX_RESULTS = 10;
@@ -27,7 +28,7 @@ export interface SearchResult {
  * (most recent first), each with a ~200 char context snippet.
  */
 export async function searchMemory(query: string, memoryDir: string): Promise<SearchResult[]> {
-  const sessionsDir = `${memoryDir}/sessions`;
+  const sessionsDir = join(memoryDir, "sessions");
   const queryLower = query.toLowerCase();
 
   let entries: string[];
@@ -42,7 +43,7 @@ export async function searchMemory(query: string, memoryDir: string): Promise<Se
   for (const entry of entries) {
     if (!entry.endsWith(".md")) continue;
 
-    const filePath = `${sessionsDir}/${entry}`;
+    const filePath = join(sessionsDir, entry);
     const file = Bun.file(filePath);
 
     let content: string;

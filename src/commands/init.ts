@@ -8,6 +8,7 @@
 import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { loadConfig, resolveShakaHome } from "../domain/config";
+import { resolveFromModule } from "../platform/paths";
 import { findNewerLocalTag, getGitRef } from "../domain/version";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
@@ -196,7 +197,7 @@ function logCreatedItems(result: InitResult): void {
 }
 
 async function logVersionInfo(result: InitResult): Promise<void> {
-  const repoRoot = new URL("../..", import.meta.url).pathname;
+  const repoRoot = resolveFromModule(import.meta.url, "../..");
   const ref = await getGitRef(repoRoot);
   const refLabel = ref
     ? ref.type === "tag"

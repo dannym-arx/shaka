@@ -11,6 +11,7 @@
  */
 
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
 
 /**
  * Shaka's canonical hook event names.
@@ -89,7 +90,7 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
     for (const entry of entries) {
       if (!entry.endsWith(".ts")) continue;
 
-      const filePath = `${hooksDir}/${entry}`;
+      const filePath = join(hooksDir, entry);
       const { events, matchers } = await parseHookTrigger(filePath);
 
       for (const event of events) {
@@ -114,8 +115,8 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
  * Additional hooks in customizations/ (no system counterpart) are appended.
  */
 export async function discoverAllHooks(shakaHome: string): Promise<DiscoveredHook[]> {
-  const systemHooks = await discoverHooks(`${shakaHome}/system/hooks`);
-  const customHooks = await discoverHooks(`${shakaHome}/customizations/hooks`);
+  const systemHooks = await discoverHooks(join(shakaHome, "system", "hooks"));
+  const customHooks = await discoverHooks(join(shakaHome, "customizations", "hooks"));
 
   // Customization filenames that override system counterparts
   const overridden = new Set(customHooks.map((h) => h.filename));

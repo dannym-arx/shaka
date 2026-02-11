@@ -9,6 +9,7 @@
  */
 
 import { mkdir, readdir } from "node:fs/promises";
+import { join } from "node:path";
 import { stringify as stringifyYaml } from "yaml";
 import { type SessionSummary, parseSummaryOutput } from "./summarize";
 
@@ -29,12 +30,12 @@ export interface SummaryIndex {
  * Returns the written file path.
  */
 export async function writeSummary(memoryDir: string, summary: SessionSummary): Promise<string> {
-  const sessionsDir = `${memoryDir}/sessions`;
+  const sessionsDir = join(memoryDir, "sessions");
   await mkdir(sessionsDir, { recursive: true });
 
   const sessionHash = hashSessionId(summary.metadata.sessionId);
   const filename = `${summary.metadata.date}-${sessionHash}.md`;
-  const filePath = `${sessionsDir}/${filename}`;
+  const filePath = join(sessionsDir, filename);
 
   const content = serializeSummary(summary);
   await Bun.write(filePath, content);
@@ -49,7 +50,7 @@ export async function writeSummary(memoryDir: string, summary: SessionSummary): 
  * Returns empty array if the directory doesn't exist.
  */
 export async function listSummaries(memoryDir: string): Promise<SummaryIndex[]> {
-  const sessionsDir = `${memoryDir}/sessions`;
+  const sessionsDir = join(memoryDir, "sessions");
 
   let entries: string[];
   try {
@@ -63,7 +64,7 @@ export async function listSummaries(memoryDir: string): Promise<SummaryIndex[]> 
   for (const entry of entries) {
     if (!entry.endsWith(".md")) continue;
 
-    const filePath = `${sessionsDir}/${entry}`;
+    const filePath = join(sessionsDir, entry);
     const summary = await loadSummary(filePath);
     if (!summary) continue;
 

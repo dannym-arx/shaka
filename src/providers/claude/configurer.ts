@@ -9,6 +9,8 @@
  * Each hook declares its trigger event via: TRIGGER: EventName
  */
 
+import { homedir } from "node:os";
+import { join } from "node:path";
 import { type Result, err, ok } from "../../domain/result";
 import { installAssetSymlink, uninstallAssetSymlink, verifyAssetSymlink } from "../asset-installer";
 import {
@@ -47,9 +49,10 @@ interface ClaudeSettings {
  * Identifies Shaka hooks by their command path containing the shaka hooks directory.
  */
 function isShakaHookEntry(entry: ClaudeHookEntry): boolean {
-  return entry.hooks.some(
-    (h) => h.command.includes("/system/hooks/") || h.command.includes("/customizations/hooks/"),
-  );
+  return entry.hooks.some((h) => {
+    const cmd = h.command.replace(/\\/g, "/");
+    return cmd.includes("/system/hooks/") || cmd.includes("/customizations/hooks/");
+  });
 }
 
 /**
@@ -136,7 +139,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
     claudeHome?: string;
     runCommand?: (args: string[]) => Promise<{ exitCode: number; stderr: string }>;
   }) {
-    this.claudeHome = options?.claudeHome ?? `${process.env.HOME}/.claude`;
+    this.claudeHome = options?.claudeHome ?? join(homedir(), ".claude");
     this.runCommand = options?.runCommand ?? defaultRunCommand;
   }
 
@@ -166,10 +169,10 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       await this.saveSettings(settings);
 
       // Install agents from defaults/system/agents/
-      await installAssetSymlink(`${config.shakaHome}/system/agents`, `${this.claudeHome}/agents`);
+      await installAssetSymlink(join(config.shakaHome, "system", "agents"), join(this.claudeHome, "agents"));
 
       // Install skills from defaults/system/skills/
-      await installAssetSymlink(`${config.shakaHome}/system/skills`, `${this.claudeHome}/skills`);
+      await installAssetSymlink(join(config.shakaHome, "system", "skills"), join(this.claudeHome, "skills"));
 
       return ok(undefined);
     } catch (e) {
@@ -233,7 +236,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
   }
 
   private async loadSettings(): Promise<ClaudeSettings> {
-    const settingsPath = `${this.claudeHome}/settings.json`;
+    const settingsPath = join(this.claudeHome, "settings.json");
     const file = Bun.file(settingsPath);
 
     if (await file.exists()) {
@@ -243,7 +246,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
   }
 
   private async saveSettings(settings: ClaudeSettings): Promise<void> {
-    const settingsPath = `${this.claudeHome}/settings.json`;
+    const settingsPath = join(this.claudeHome, "settings.json");
     await Bun.write(settingsPath, JSON.stringify(settings, null, 2));
   }
 
@@ -274,7 +277,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
 
   async uninstall(config: InstallConfig): Promise<Result<void, Error>> {
     try {
-      const settingsPath = `${this.claudeHome}/settings.json`;
+      const settingsPath = join(this.claudeHome, "settings.json");
       const file = Bun.file(settingsPath);
 
       if (await file.exists()) {
@@ -293,8 +296,8 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       }
 
       // Remove agents and skills installed by shaka
-      await uninstallAssetSymlink(`${config.shakaHome}/system/agents`, `${this.claudeHome}/agents`);
-      await uninstallAssetSymlink(`${config.shakaHome}/system/skills`, `${this.claudeHome}/skills`);
+      await uninstallAssetSymlink(join(config.shakaHome, "system", "agents"), join(this.claudeHome, "agents"));
+      await uninstallAssetSymlink(join(config.shakaHome, "system", "skills"), join(this.claudeHome, "skills"));
 
       return ok(undefined);
     } catch (e) {
@@ -305,13 +308,13 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
   async checkInstallation(config: InstallConfig): Promise<InstallationStatus> {
     const hooks = await this.checkHooks();
     const agents = await verifyAssetSymlink(
-      `${config.shakaHome}/system/agents`,
-      `${this.claudeHome}/agents`,
+      join(config.shakaHome, "system", "agents"),
+      join(this.claudeHome, "agents"),
       "agents",
     );
     const skills = await verifyAssetSymlink(
-      `${config.shakaHome}/system/skills`,
-      `${this.claudeHome}/skills`,
+      join(config.shakaHome, "system", "skills"),
+      join(this.claudeHome, "skills"),
       "skills",
     );
 
@@ -319,7 +322,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
   }
 
   private async checkHooks(): Promise<{ ok: boolean; issue?: string }> {
-    const settingsPath = `${this.claudeHome}/settings.json`;
+    const settingsPath = join(this.claudeHome, "settings.json");
     const file = Bun.file(settingsPath);
 
     if (!(await file.exists())) {
