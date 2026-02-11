@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, symlink } from "node:fs/promises";
 import { ClaudeProviderConfigurer } from "../../../../src/providers/claude/configurer";
 import {
   HOOK_EVENTS,
@@ -19,12 +19,28 @@ describe("ClaudeProviderConfigurer", () => {
     await rm(testShakaHome, { recursive: true, force: true });
     await mkdir(testClaudeHome, { recursive: true });
     await mkdir(`${testShakaHome}/system/hooks`, { recursive: true });
+    await mkdir(`${testShakaHome}/system/agents`, { recursive: true });
+    await mkdir(`${testShakaHome}/system/skills`, { recursive: true });
 
     // Create a test hook with TRIGGER export (Shaka canonical names)
     await Bun.write(
       `${testShakaHome}/system/hooks/session-start.ts`,
       `export const TRIGGER = ["session.start"] as const;
 console.log("test");
+`,
+    );
+
+    // Create critical agent for inference (will be symlinked as shaka/inference)
+    await Bun.write(
+      `${testShakaHome}/system/agents/inference.md`,
+      `---
+mode: primary
+hidden: true
+permission:
+  "*": deny
+---
+
+You are a text-only inference assistant.
 `,
     );
   });
@@ -45,7 +61,7 @@ console.log("test");
     test("creates settings.json if it does not exist", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+      const result = await configurer.install({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
       const settingsFile = Bun.file(`${testClaudeHome}/settings.json`);
@@ -55,7 +71,7 @@ console.log("test");
     test("adds discovered hook entries", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       expect(settings.hooks).toBeDefined();
@@ -70,7 +86,7 @@ console.log("test");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       expect(settings.existingKey).toBe("existingValue");
@@ -80,8 +96,8 @@ console.log("test");
     test("does not duplicate hook if already exists", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       const shakaHooks = settings.hooks.SessionStart.filter(
@@ -99,7 +115,7 @@ console.log("test");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       expect(settings.hooks.SessionEnd).toBeDefined();
@@ -118,7 +134,7 @@ console.log("format");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       expect(settings.hooks.SessionStart).toBeDefined();
@@ -141,7 +157,7 @@ console.log("hook-b");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       const shakaEntry = settings.hooks.UserPromptSubmit.find(
@@ -167,7 +183,7 @@ console.log("security");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       const bashEntry = settings.hooks.PreToolUse.find(
@@ -204,7 +220,7 @@ console.log("logger");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
 
@@ -236,7 +252,7 @@ export const MATCHER = ["Bash"] as const;
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       const bashEntry = settings.hooks.PreToolUse.find(
@@ -257,7 +273,7 @@ console.log("custom");
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
       expect(settings.hooks.UserPromptSubmit).toBeDefined();
@@ -269,12 +285,12 @@ console.log("custom");
     });
   });
 
-  describe("uninstallHooks", () => {
+  describe("uninstall", () => {
     test("removes shaka hooks from all events", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
-      const result = await configurer.uninstallHooks();
+      const result = await configurer.uninstall({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
@@ -292,9 +308,9 @@ console.log("custom");
         `export const TRIGGER = ["prompt.submit"] as const;`,
       );
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
-      const result = await configurer.uninstallHooks();
+      const result = await configurer.uninstall({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
       const settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
@@ -308,41 +324,58 @@ console.log("custom");
     test("succeeds if settings.json does not exist", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      const result = await configurer.uninstallHooks();
+      const result = await configurer.uninstall({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
     });
   });
 
-  describe("verifyHooks", () => {
-    test("returns installed: true when hooks are configured", async () => {
+  describe("checkInstallation", () => {
+    test("returns all ok when fully installed", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
-      const result = await configurer.verifyHooks();
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 
-      expect(result.installed).toBe(true);
-      expect(result.issues).toHaveLength(0);
+      expect(result.hooks.ok).toBe(true);
+      expect(result.agents.ok).toBe(true);
+      expect(result.skills.ok).toBe(true);
     });
 
-    test("returns installed: false when settings.json missing", async () => {
+    test("returns hooks not ok when settings.json missing", async () => {
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
       await rm(`${testClaudeHome}/settings.json`, { force: true });
 
-      const result = await configurer.verifyHooks();
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 
-      expect(result.installed).toBe(false);
-      expect(result.issues).toContain("settings.json not found");
+      expect(result.hooks.ok).toBe(false);
+      expect(result.hooks.issue).toBe("settings.json not found");
     });
 
-    test("returns installed: false when no shaka hooks configured", async () => {
+    test("returns hooks not ok when no shaka hooks configured", async () => {
       await Bun.write(`${testClaudeHome}/settings.json`, JSON.stringify({ hooks: {} }));
       const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
-      const result = await configurer.verifyHooks();
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 
-      expect(result.installed).toBe(false);
-      expect(result.issues).toContain("No Shaka hooks configured");
+      expect(result.hooks.ok).toBe(false);
+      expect(result.hooks.issue).toBe("No Shaka hooks configured");
+    });
+
+    test("detects wrong-target agents symlink", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+      await configurer.install({ shakaHome: testShakaHome });
+
+      // Create a symlink pointing to wrong location
+      const agentsDir = `${testClaudeHome}/agents`;
+      await rm(`${agentsDir}/shaka`, { force: true });
+      await mkdir(agentsDir, { recursive: true });
+      await symlink("/wrong/path", `${agentsDir}/shaka`, "dir");
+
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
+
+      expect(result.agents.ok).toBe(false);
+      expect(result.agents.issue).toContain("wrong location");
     });
   });
 

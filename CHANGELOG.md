@@ -11,10 +11,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 - **`shaka config get/set` commands** — Get and set configuration values from the CLI using dot-notation paths (e.g., `shaka config get providers.opencode.enabled`, `shaka config set providers.opencode.summarization_model=openrouter/anthropic/claude-haiku-4.5`)
 - **Destructive overwrite protection** — `config set` prevents accidentally replacing objects with primitives (e.g., setting `providers.claude=foo` when it contains multiple keys)
 - **opencode summarization model hint** — After `shaka init`, `shaka doctor`, or `shaka update`, displays a hint suggesting users configure a specific summarization model
+- **Agents installation** — Agents from `system/agents/` are now symlinked to provider config directories (`~/.claude/agents/shaka/`, `~/.config/opencode/agents/shaka/`)
+- **Skills installation** — Skills from `system/skills/` are now symlinked to provider config directories
+- **Dual provider permissions in agents** — All agent definitions now include both Claude Code and OpenCode permission blocks
+- **Inference agent** — Tool-restricted agent (`inference.md`) for safe LLM inference calls
+
+### Changed
+
+- **`shaka reload-hooks` renamed to `shaka reload`** — Command now reinstalls all provider components (hooks, agents, skills), not just hooks
+- **Provider interface broadened** — `installHooks`/`uninstallHooks`/`verifyHooks` renamed to `install`/`uninstall`/`checkInstallation` to reflect expanded scope
+- **`shaka doctor` checks all components** — Now verifies hooks, agents, and skills installation status separately
+- **Docker auth simplified** — Uses `CLAUDE_CODE_OAUTH_TOKEN` env var instead of volume-mounted credentials file
 
 ### Fixed
 
 - **`shaka update` works from any directory** — Repo root now resolved via `import.meta.url` instead of `git rev-parse` from cwd, so update no longer requires running from inside the shaka repo
+- **Stale error message in uninstall** — Changed "hooks" to "configuration" in error output
 
 ## [0.2.1] — 2026-02-10
 

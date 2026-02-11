@@ -1,6 +1,6 @@
 /**
  * Provider abstraction for Claude Code and opencode.
- * Each provider implements this interface to handle hook installation.
+ * Each provider implements this interface to handle installation.
  */
 
 import type { Result } from "../domain/result";
@@ -13,21 +13,27 @@ export interface ProviderConfigurer {
   /** Check if provider CLI is installed */
   isInstalled(): Promise<boolean>;
 
-  /** Install Shaka hooks for this provider */
-  installHooks(config: HookConfig): Promise<Result<void, Error>>;
+  /** Install Shaka hooks, agents, and skills for this provider */
+  install(config: InstallConfig): Promise<Result<void, Error>>;
 
-  /** Uninstall Shaka hooks */
-  uninstallHooks(): Promise<Result<void, Error>>;
+  /** Uninstall Shaka hooks, agents, and skills */
+  uninstall(config: InstallConfig): Promise<Result<void, Error>>;
 
-  /** Verify hooks are correctly installed */
-  verifyHooks(): Promise<HookVerificationResult>;
+  /** Check installation status: hooks, agents, skills */
+  checkInstallation(config: InstallConfig): Promise<InstallationStatus>;
 }
 
-export interface HookConfig {
+export interface InstallConfig {
   shakaHome: string;
 }
 
-export interface HookVerificationResult {
-  installed: boolean;
-  issues: string[];
+export interface ComponentStatus {
+  ok: boolean;
+  issue?: string;
+}
+
+export interface InstallationStatus {
+  hooks: ComponentStatus;
+  agents: ComponentStatus;
+  skills: ComponentStatus;
 }

@@ -64,7 +64,12 @@ async function callOpenCodeCLI(options: InferenceOptions): Promise<InferenceResu
     ? `${options.systemPrompt}\n\n${options.userPrompt}`
     : options.userPrompt;
 
-  const args = ["run", prompt];
+  // Use the "shaka/inference" agent which has all tools disabled ("*": "deny")
+  // This prevents the LLM from writing files or running commands during inference.
+  // The agent is installed by shaka via symlink: ~/.config/opencode/agents/shaka/ → source.
+  // NOTE: Requires `shaka init` to have been run. This is intentional — inference is only
+  // called from hooks, which already require shaka installation to function.
+  const args = ["run", "--agent", "shaka/inference", prompt];
   // opencode expects provider/model format (e.g., "anthropic/claude-haiku-4-5")
   // Skip bare aliases like "haiku" which are Claude CLI-specific
   if (options.model?.includes("/")) args.push("--model", options.model);

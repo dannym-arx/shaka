@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
 import { ClaudeProviderConfigurer } from "../../../src/providers/claude/configurer";
 
-describe("reload-hooks (integration)", () => {
+describe("reload (integration)", () => {
   const testClaudeHome = "/tmp/shaka-test-reload-claude";
   const testShakaHome = "/tmp/shaka-test-reload-shaka";
 
@@ -27,7 +27,7 @@ describe("reload-hooks (integration)", () => {
     const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
 
     // Initial install — only system hooks
-    await configurer.installHooks({ shakaHome: testShakaHome });
+    await configurer.install({ shakaHome: testShakaHome });
     let settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
     expect(settings.hooks.UserPromptSubmit).toBeUndefined();
 
@@ -38,13 +38,11 @@ describe("reload-hooks (integration)", () => {
       `export const TRIGGER = ["prompt.submit"] as const;`,
     );
 
-    // Reload (same as calling installHooks again)
-    await configurer.installHooks({ shakaHome: testShakaHome });
+    // Reload (same as calling install() again)
+    await configurer.install({ shakaHome: testShakaHome });
     settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
     expect(settings.hooks.UserPromptSubmit).toBeDefined();
-    const entry = settings.hooks.UserPromptSubmit.find(
-      (h: { matcher?: string }) => !h.matcher,
-    );
+    const entry = settings.hooks.UserPromptSubmit.find((h: { matcher?: string }) => !h.matcher);
     expect(entry.hooks[0].command).toContain("customizations/hooks/my-hook.ts");
   });
 
@@ -56,7 +54,7 @@ describe("reload-hooks (integration)", () => {
       `export const TRIGGER = ["prompt.submit"] as const;`,
     );
     const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
-    await configurer.installHooks({ shakaHome: testShakaHome });
+    await configurer.install({ shakaHome: testShakaHome });
 
     let settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
     expect(settings.hooks.UserPromptSubmit).toBeDefined();
@@ -65,13 +63,11 @@ describe("reload-hooks (integration)", () => {
     await rm(`${testShakaHome}/customizations/hooks/temp-hook.ts`);
 
     // Reload — UserPromptSubmit should no longer have hooks
-    await configurer.installHooks({ shakaHome: testShakaHome });
+    await configurer.install({ shakaHome: testShakaHome });
     settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
 
     // The event entry may still exist but should have no shaka hooks
-    const entry = settings.hooks.UserPromptSubmit?.find(
-      (h: { matcher?: string }) => !h.matcher,
-    );
+    const entry = settings.hooks.UserPromptSubmit?.find((h: { matcher?: string }) => !h.matcher);
     // Entry is replaced with empty hooks since no hooks discovered for this event
     expect(entry).toBeUndefined();
   });

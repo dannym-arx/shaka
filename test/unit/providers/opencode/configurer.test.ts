@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, symlink } from "node:fs/promises";
 import { OpencodeProviderConfigurer } from "../../../../src/providers/opencode/configurer";
 
 describe("OpencodeProviderConfigurer", () => {
@@ -11,12 +11,28 @@ describe("OpencodeProviderConfigurer", () => {
     await rm(testShakaHome, { recursive: true, force: true });
     await mkdir(testProjectRoot, { recursive: true });
     await mkdir(`${testShakaHome}/system/hooks`, { recursive: true });
+    await mkdir(`${testShakaHome}/system/agents`, { recursive: true });
+    await mkdir(`${testShakaHome}/system/skills`, { recursive: true });
 
     // Create test hooks with TRIGGER exports (Shaka canonical names)
     await Bun.write(
       `${testShakaHome}/system/hooks/session-start.ts`,
       `export const TRIGGER = ["session.start"] as const;
 console.log(JSON.stringify({ hookSpecificOutput: { additionalContext: "test" } }));
+`,
+    );
+
+    // Create critical agent for inference (will be symlinked as shaka/inference)
+    await Bun.write(
+      `${testShakaHome}/system/agents/inference.md`,
+      `---
+mode: primary
+hidden: true
+permission:
+  "*": deny
+---
+
+You are a text-only inference assistant.
 `,
     );
   });
@@ -37,7 +53,7 @@ console.log(JSON.stringify({ hookSpecificOutput: { additionalContext: "test" } }
     test("creates plugins directory in opencode config dir", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+      const result = await configurer.install({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
       const pluginFile = Bun.file(`${testProjectRoot}/plugins/shaka.ts`);
@@ -47,7 +63,7 @@ console.log(JSON.stringify({ hookSpecificOutput: { additionalContext: "test" } }
     test("creates shaka.ts plugin file", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const pluginFile = Bun.file(`${testProjectRoot}/plugins/shaka.ts`);
       expect(await pluginFile.exists()).toBe(true);
@@ -59,7 +75,7 @@ console.log(JSON.stringify({ hookSpecificOutput: { additionalContext: "test" } }
     test("plugin includes discovered hooks in header comment", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("session-start.ts (session.start)");
@@ -68,7 +84,7 @@ console.log(JSON.stringify({ hookSpecificOutput: { additionalContext: "test" } }
     test("plugin includes runHookRaw helper function", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("async function runHookRaw");
@@ -77,7 +93,7 @@ console.log(JSON.stringify({ hookSpecificOutput: { additionalContext: "test" } }
     test("plugin includes system.transform hook for session.start", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("experimental.chat.system.transform");
@@ -92,7 +108,7 @@ console.log("format");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("session-start.ts (session.start)");
@@ -108,7 +124,7 @@ export const MATCHER = ["Bash", "Edit"] as const;
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("security.ts (tool.before, matchers: Bash, Edit)");
@@ -123,7 +139,7 @@ export const MATCHER = ["Bash"] as const;
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("const TOOL_HOOKS: ToolHookConfig[]");
@@ -140,7 +156,7 @@ export const MATCHER = ["Bash"] as const;
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("function shouldRunForTool");
@@ -156,7 +172,7 @@ export const MATCHER = ["Bash"] as const;
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       // Should normalize opencode format to Claude format
@@ -176,7 +192,7 @@ export const MATCHER = ["Bash"] as const;
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("exitCode === 2");
@@ -193,7 +209,7 @@ export const MATCHER = ["Bash"] as const;
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain('decision === "ask"');
@@ -209,7 +225,7 @@ console.log("session end");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("event:");
@@ -226,7 +242,7 @@ console.log("session end");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("sessionId");
@@ -242,7 +258,7 @@ console.log("session end");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("idleTimer");
@@ -259,7 +275,7 @@ console.log("session end");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("session.status");
@@ -276,7 +292,7 @@ console.log("session end");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain("session_id");
@@ -288,7 +304,7 @@ console.log("session end");
       // Only session.start hook exists (from beforeEach)
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).not.toContain("idleTimer");
@@ -303,7 +319,7 @@ console.log("tool after");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       expect(content).toContain('"tool.execute.after"');
@@ -318,7 +334,7 @@ console.log("session end");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+      const result = await configurer.install({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
     });
@@ -350,7 +366,7 @@ console.log("format");
       );
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+      const result = await configurer.install({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
     });
@@ -358,7 +374,7 @@ console.log("format");
     test("exports a plugin function, not a plain object", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
       const content = await Bun.file(`${testProjectRoot}/plugins/shaka.ts`).text();
       // opencode's plugin loader calls each export as a function.
@@ -370,19 +386,19 @@ console.log("format");
     test("validates generated plugin syntax", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      const result = await configurer.installHooks({ shakaHome: testShakaHome });
+      const result = await configurer.install({ shakaHome: testShakaHome });
 
       // Should succeed - generated plugin should be valid
       expect(result.ok).toBe(true);
     });
   });
 
-  describe("uninstallHooks", () => {
+  describe("uninstall", () => {
     test("removes shaka.ts plugin file", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
-      const result = await configurer.uninstallHooks();
+      const result = await configurer.uninstall({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
       const pluginFile = Bun.file(`${testProjectRoot}/plugins/shaka.ts`);
@@ -392,30 +408,47 @@ console.log("format");
     test("succeeds if plugin file does not exist", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      const result = await configurer.uninstallHooks();
+      const result = await configurer.uninstall({ shakaHome: testShakaHome });
 
       expect(result.ok).toBe(true);
     });
   });
 
-  describe("verifyHooks", () => {
-    test("returns installed: true when plugin exists", async () => {
+  describe("checkInstallation", () => {
+    test("returns all ok when fully installed", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
-      await configurer.installHooks({ shakaHome: testShakaHome });
+      await configurer.install({ shakaHome: testShakaHome });
 
-      const result = await configurer.verifyHooks();
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 
-      expect(result.installed).toBe(true);
-      expect(result.issues).toHaveLength(0);
+      expect(result.hooks.ok).toBe(true);
+      expect(result.agents.ok).toBe(true);
+      expect(result.skills.ok).toBe(true);
     });
 
-    test("returns installed: false when plugin missing", async () => {
+    test("returns hooks not ok when plugin missing", async () => {
       const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
 
-      const result = await configurer.verifyHooks();
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 
-      expect(result.installed).toBe(false);
-      expect(result.issues).toContain("shaka.ts plugin not found");
+      expect(result.hooks.ok).toBe(false);
+      expect(result.hooks.issue).toBe("shaka.ts plugin not found");
+    });
+
+    test("detects wrong-target agents symlink", async () => {
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+      await configurer.install({ shakaHome: testShakaHome });
+
+      // Create a symlink pointing to wrong location
+      const agentsDir = `${testProjectRoot}/agents`;
+      await rm(`${agentsDir}/shaka`, { force: true });
+      await mkdir(agentsDir, { recursive: true });
+      await symlink("/wrong/path", `${agentsDir}/shaka`, "dir");
+
+      const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
+
+      expect(result.agents.ok).toBe(false);
+      expect(result.agents.issue).toContain("wrong location");
     });
   });
 });

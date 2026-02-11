@@ -4,7 +4,7 @@
 
 Missions are enduring directions, not tasks with deadlines. They answer: _"What am I about?"_
 
-Inspired by the [TELOS framework](https://github.com/danielmiessler/Telos) — start simple, expand as needed.
+Inspired by Daniel Miessler's TELOS framework — start simple, expand as needed.
 
 ---
 

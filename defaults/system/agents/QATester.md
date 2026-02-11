@@ -4,7 +4,9 @@ description: Quality Assurance validation agent that verifies functionality is a
 capability: qa
 capability_description: Testing, verification, browser validation
 model: sonnet
-color: yellow
+color: "#EAB308"
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -16,6 +18,17 @@ permissions:
     - "mcp__*"
     - "TodoWrite(*)"
     - "Skill(*)"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  todowrite: allow
+  skill: allow
 ---
 
 # Startup

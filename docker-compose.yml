@@ -12,9 +12,8 @@
 #   docker compose run --rm opencode bash test/e2e/opencode.sh
 #   docker compose run --rm claudecode bash test/e2e/claudecode.sh
 #
-# Claude auth: credentials file is bind-mounted so OAuth persists between runs.
-# First run: mkdir -p .docker-state && touch .docker-state/claude-credentials.json
-# To reset auth: rm .docker-state/claude-credentials.json && touch .docker-state/claude-credentials.json
+# Claude auth: CLAUDE_CODE_OAUTH_TOKEN from root .env (gitignored).
+# Generate token: claude setup-token → paste into .env as CLAUDE_CODE_OAUTH_TOKEN=<token>
 
 services:
   opencode:
@@ -28,5 +27,5 @@ services:
       context: .
       dockerfile: dockerfile-claudecode
     image: shaka-claudecode
-    volumes:
-      - ./.docker-state/claude-credentials.json:/home/shakaUser/.claude/.credentials.json
+    environment:
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN}

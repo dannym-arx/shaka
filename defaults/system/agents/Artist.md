@@ -4,7 +4,9 @@ description: Visual content creator. Expert at prompt engineering, model selecti
 capability: creative
 capability_description: Visual content, art, illustrations
 model: sonnet
-color: cyan
+color: "#06B6D4"
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -17,6 +19,18 @@ permissions:
     - "WebSearch"
     - "TodoWrite(*)"
     - "SlashCommand"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  webfetch: allow
+  websearch: allow
+  todowrite: allow
 ---
 
 # Startup

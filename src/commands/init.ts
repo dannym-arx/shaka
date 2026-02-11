@@ -149,7 +149,7 @@ function logProviderStatus(providers: InitResult["providers"]): void {
   console.log(`  opencode:    ${providers.opencode.detected ? "✓ detected" : "✗ not found"}`);
 }
 
-async function installProviderHooks(
+async function installProviders(
   providers: InitResult["providers"],
   shakaHome: string,
 ): Promise<void> {
@@ -157,11 +157,13 @@ async function installProviderHooks(
   for (const providerName of providerNames) {
     if (providers[providerName].installed) {
       const provider = createProvider(providerName);
-      const hookResult = await provider.installHooks({ shakaHome });
-      if (!hookResult.ok) {
-        console.error(`  ✗ Failed to install ${providerName} hooks: ${hookResult.error.message}`);
+      const result = await provider.install({ shakaHome });
+      if (!result.ok) {
+        console.error(
+          `  ✗ Failed to install ${providerName} configuration: ${result.error.message}`,
+        );
       } else {
-        console.log(`  ✓ Installed ${providerName} hooks`);
+        console.log(`  ✓ Installed ${providerName} configuration`);
       }
     }
   }
@@ -253,7 +255,7 @@ export function createInitCommand(): Command {
       }
 
       logProviderStatus(result.value.providers);
-      await installProviderHooks(result.value.providers, shakaHome);
+      await installProviders(result.value.providers, shakaHome);
       logCreatedItems(result.value);
       await logVersionInfo(result.value);
       await printOpencodeSummarizationHint(shakaHome);

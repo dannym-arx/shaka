@@ -15,8 +15,9 @@
 import { mkdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { type Result, err, ok } from "../../domain/result";
+import { installAssetSymlink, uninstallAssetSymlink, verifyAssetSymlink } from "../asset-installer";
 import { type DiscoveredHook, discoverAllHooks } from "../hook-discovery";
-import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
+import type { InstallConfig, InstallationStatus, ProviderConfigurer } from "../types";
 
 /** Resolve the global opencode config directory (XDG-compliant). */
 function defaultOpencodeConfigDir(): string {
@@ -40,7 +41,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
     return (await proc.exited) === 0;
   }
 
-  async installHooks(config: HookConfig): Promise<Result<void, Error>> {
+  async install(config: InstallConfig): Promise<Result<void, Error>> {
     try {
       const pluginsDir = `${this.opencodeConfigDir}/plugins`;
       await mkdir(pluginsDir, { recursive: true });
@@ -59,6 +60,18 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
         await unlink(pluginPath);
         return validationResult;
       }
+
+      // Install agents from defaults/system/agents/
+      await installAssetSymlink(
+        `${config.shakaHome}/system/agents`,
+        `${this.opencodeConfigDir}/agents`,
+      );
+
+      // Install skills from defaults/system/skills/
+      await installAssetSymlink(
+        `${config.shakaHome}/system/skills`,
+        `${this.opencodeConfigDir}/skills`,
+      );
 
       return ok(undefined);
     } catch (e) {
@@ -83,14 +96,23 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
     return ok(undefined);
   }
 
-  async uninstallHooks(): Promise<Result<void, Error>> {
+  async uninstall(config: InstallConfig): Promise<Result<void, Error>> {
     try {
       const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
-      const file = Bun.file(pluginPath);
-
-      if (await file.exists()) {
+      const pluginFile = Bun.file(pluginPath);
+      if (await pluginFile.exists()) {
         await unlink(pluginPath);
       }
+
+      // Remove agents and skills installed by shaka
+      await uninstallAssetSymlink(
+        `${config.shakaHome}/system/agents`,
+        `${this.opencodeConfigDir}/agents`,
+      );
+      await uninstallAssetSymlink(
+        `${config.shakaHome}/system/skills`,
+        `${this.opencodeConfigDir}/skills`,
+      );
 
       return ok(undefined);
     } catch (e) {
@@ -98,23 +120,32 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
     }
   }
 
-  async verifyHooks(): Promise<HookVerificationResult> {
-    const issues: string[] = [];
+  async checkInstallation(config: InstallConfig): Promise<InstallationStatus> {
+    const hooks = await this.checkHooks();
+    const agents = await verifyAssetSymlink(
+      `${config.shakaHome}/system/agents`,
+      `${this.opencodeConfigDir}/agents`,
+      "agents",
+    );
+    const skills = await verifyAssetSymlink(
+      `${config.shakaHome}/system/skills`,
+      `${this.opencodeConfigDir}/skills`,
+      "skills",
+    );
 
-    const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
-    const file = Bun.file(pluginPath);
-
-    if (!(await file.exists())) {
-      issues.push("shaka.ts plugin not found");
-    }
-
-    return {
-      installed: issues.length === 0,
-      issues,
-    };
+    return { hooks, agents, skills };
   }
 
-  private generatePluginContent(config: HookConfig, hooks: DiscoveredHook[]): string {
+  private async checkHooks(): Promise<{ ok: boolean; issue?: string }> {
+    const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
+    const pluginFile = Bun.file(pluginPath);
+    if (!(await pluginFile.exists())) {
+      return { ok: false, issue: "shaka.ts plugin not found" };
+    }
+    return { ok: true };
+  }
+
+  private generatePluginContent(config: InstallConfig, hooks: DiscoveredHook[]): string {
     // Group hooks by Shaka canonical event names
     const sessionStartHooks = hooks.filter((h) => h.event === "session.start");
     const sessionEndHooks = hooks.filter((h) => h.event === "session.end");

@@ -4,7 +4,9 @@ description: Elite UX/UI design specialist with design school pedigree and exact
 capability: design
 capability_description: UX/UI design, visual interfaces
 model: sonnet
-color: purple
+color: "#A855F7"
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -18,6 +20,18 @@ permissions:
     - "WebSearch"
     - "mcp__*"
     - "TodoWrite(*)"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  webfetch: allow
+  websearch: allow
+  todowrite: allow
 ---
 
 # Startup

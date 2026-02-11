@@ -1,8 +1,9 @@
 /**
- * CLI handler for `shaka reload-hooks` command.
+ * CLI handler for `shaka reload` command.
  *
  * Re-discovers hooks from system/hooks/ and customizations/hooks/,
  * then regenerates provider configurations (settings.json, opencode plugin).
+ * Also reinstalls agents and skills symlinks.
  *
  * Use after adding, removing, or modifying hook files.
  */
@@ -12,9 +13,9 @@ import { loadConfig, resolveShakaHome } from "../domain/config";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
 
-export function createReloadHooksCommand(): Command {
-  return new Command("reload-hooks")
-    .description("Re-discover hooks and regenerate provider configurations")
+export function createReloadCommand(): Command {
+  return new Command("reload")
+    .description("Reload provider configuration (hooks, agents, skills)")
     .action(async () => {
       const shakaHome = resolveShakaHome({
         SHAKA_HOME: process.env.SHAKA_HOME,
@@ -37,15 +38,15 @@ export function createReloadHooksCommand(): Command {
         process.exit(1);
       }
 
-      console.log("Reloading hooks...\n");
+      console.log("Reloading configuration...\n");
 
       for (const providerName of providers) {
         const provider = createProvider(providerName);
-        const result = await provider.installHooks({ shakaHome });
+        const result = await provider.install({ shakaHome });
         if (!result.ok) {
-          console.error(`  ✗ Failed to reload ${providerName} hooks: ${result.error.message}`);
+          console.error(`  ✗ Failed to reload ${providerName}: ${result.error.message}`);
         } else {
-          console.log(`  ✓ Reloaded ${providerName} hooks`);
+          console.log(`  ✓ Reloaded ${providerName} configuration`);
         }
       }
 

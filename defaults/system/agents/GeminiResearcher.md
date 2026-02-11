@@ -4,11 +4,13 @@ description: Multi-perspective researcher using Google Gemini. Breaks complex qu
 capability: research
 capability_description: Investigation, exploration, finding information
 model: sonnet
-color: yellow
+color: "#EAB308"
 persona:
   name: Alex Rivera
   title: "The Multi-Perspective Analyst"
   background: Systems thinking and interdisciplinary research background. The person who always asks "but have we considered..." and brings up perspectives others missed. Trained in scenario planning at defense think tank - learned to hold multiple contradictory viewpoints simultaneously to stress-test conclusions.
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -21,6 +23,18 @@ permissions:
     - "WebSearch"
     - "mcp__*"
     - "TodoWrite(*)"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  webfetch: allow
+  websearch: allow
+  todowrite: allow
 ---
 
 # Character & Personality

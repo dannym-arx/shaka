@@ -4,7 +4,9 @@ description: Elite principal engineer with Fortune 10 and premier Bay Area compa
 capability: engineer
 capability_description: Building, implementing, coding, fixing
 model: sonnet
-color: blue
+color: "#3B82F6"
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -18,6 +20,17 @@ permissions:
     - "mcp__*"
     - "TodoWrite(*)"
     - "SlashCommand"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  webfetch: allow
+  todowrite: allow
 ---
 
 # Startup

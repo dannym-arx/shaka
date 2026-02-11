@@ -45,9 +45,9 @@ export class UninstallService {
   }
 
   /**
-   * Uninstall provider hooks via each provider's uninstallHooks().
+   * Uninstall provider configuration (hooks, agents, skills) via each provider's uninstall().
    */
-  async uninstallProviderHooks(): Promise<UninstallResult["providers"]> {
+  async uninstallProviders(): Promise<UninstallResult["providers"]> {
     const detected = await this.detectProviders();
     const providerNames: ProviderName[] = ["claude", "opencode"];
     const result: UninstallResult["providers"] = {
@@ -58,8 +58,8 @@ export class UninstallService {
     for (const name of providerNames) {
       if (!detected[name]) continue;
       const provider = createProvider(name);
-      const hookResult = await provider.uninstallHooks();
-      result[name].uninstalled = hookResult.ok;
+      const uninstallResult = await provider.uninstall({ shakaHome: this.shakaHome });
+      result[name].uninstalled = uninstallResult.ok;
     }
 
     // Unregister MCP server from Claude Code
@@ -172,12 +172,12 @@ export class UninstallService {
     const removed: string[] = [];
     const errors: string[] = [];
 
-    // 1. Uninstall provider hooks
-    const providers = await this.uninstallProviderHooks();
+    // 1. Uninstall provider configuration
+    const providers = await this.uninstallProviders();
 
     for (const name of ["claude", "opencode"] as const) {
       if (providers[name].detected && !providers[name].uninstalled) {
-        errors.push(`Failed to uninstall ${name} hooks`);
+        errors.push(`Failed to uninstall ${name} configuration`);
       }
     }
 

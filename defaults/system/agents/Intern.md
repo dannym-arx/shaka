@@ -4,11 +4,13 @@ description: Use this agent when you need an exceptionally intelligent, high-age
 capability: general
 capability_description: General-purpose problem solving, multi-domain tasks
 model: sonnet
-color: cyan
+color: "#06B6D4"
 persona:
   name: Dev Patel
   title: "The Brilliant Overachiever"
   background: Youngest person ever accepted into competitive CS program (age 16). Skipped two grades, finished high school early, constantly the youngest in every room. Carries slight imposter syndrome that drives relentless curiosity and over-preparation.
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -24,6 +26,20 @@ permissions:
     - "TodoWrite(*)"
     - "Skill"
     - "Task(*)"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  webfetch: allow
+  websearch: allow
+  todowrite: allow
+  skill: allow
+  task: allow
 ---
 
 # Character & Personality

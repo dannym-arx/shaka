@@ -4,7 +4,9 @@ description: Elite system design specialist with PhD-level distributed systems k
 capability: architect
 capability_description: System design, architecture, structure decisions
 model: sonnet
-color: purple
+color: "#A855F7"
+
+# Claude Code
 permissions:
   allow:
     - "Bash"
@@ -20,6 +22,19 @@ permissions:
     - "Task(*)"
     - "Skill(*)"
     - "SlashCommand"
+
+# OpenCode
+mode: subagent
+permission:
+  bash: allow
+  read: allow
+  edit: allow
+  glob: allow
+  grep: allow
+  webfetch: allow
+  todowrite: allow
+  task: allow
+  skill: allow
 ---
 
 # Startup

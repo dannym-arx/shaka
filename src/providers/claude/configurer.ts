@@ -1,19 +1,23 @@
 /**
  * Claude Code provider configuration.
- * Installs hooks in ~/.claude/settings.json.
+ * Installs hooks in ~/.claude/settings.json, agents in ~/.claude/agents/,
+ * and skills in ~/.claude/skills/.
  *
  * Hooks are discovered from ${shakaHome}/system/hooks/*.ts and ${shakaHome}/customizations/hooks/*.ts
+ * Agents are discovered from ${shakaHome}/system/agents/*.md
+ * Skills are discovered from ${shakaHome}/system/skills/
  * Each hook declares its trigger event via: TRIGGER: EventName
  */
 
 import { type Result, err, ok } from "../../domain/result";
+import { installAssetSymlink, uninstallAssetSymlink, verifyAssetSymlink } from "../asset-installer";
 import {
   type DiscoveredHook,
   type HookEvent,
   SHAKA_TO_CLAUDE_EVENT,
   discoverAllHooks,
 } from "../hook-discovery";
-import type { HookConfig, HookVerificationResult, ProviderConfigurer } from "../types";
+import type { InstallConfig, InstallationStatus, ProviderConfigurer } from "../types";
 
 /** Default command runner using Bun.spawn. */
 async function defaultRunCommand(args: string[]): Promise<{ exitCode: number; stderr: string }> {
@@ -144,7 +148,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
     return (await proc.exited) === 0;
   }
 
-  async installHooks(config: HookConfig): Promise<Result<void, Error>> {
+  async install(config: InstallConfig): Promise<Result<void, Error>> {
     try {
       const settings = await this.loadSettings();
       if (!settings.hooks) {
@@ -164,6 +168,13 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       this.registerAllHooks(settings, hooksByEvent);
 
       await this.saveSettings(settings);
+
+      // Install agents from defaults/system/agents/
+      await installAssetSymlink(`${config.shakaHome}/system/agents`, `${this.claudeHome}/agents`);
+
+      // Install skills from defaults/system/skills/
+      await installAssetSymlink(`${config.shakaHome}/system/skills`, `${this.claudeHome}/skills`);
+
       return ok(undefined);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
@@ -265,7 +276,7 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
     }
   }
 
-  async uninstallHooks(): Promise<Result<void, Error>> {
+  async uninstall(config: InstallConfig): Promise<Result<void, Error>> {
     try {
       const settingsPath = `${this.claudeHome}/settings.json`;
       const file = Bun.file(settingsPath);
@@ -285,26 +296,46 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
         await Bun.write(settingsPath, JSON.stringify(settings, null, 2));
       }
 
+      // Remove agents and skills installed by shaka
+      await uninstallAssetSymlink(`${config.shakaHome}/system/agents`, `${this.claudeHome}/agents`);
+      await uninstallAssetSymlink(`${config.shakaHome}/system/skills`, `${this.claudeHome}/skills`);
+
       return ok(undefined);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
     }
   }
 
-  async verifyHooks(): Promise<HookVerificationResult> {
+  async checkInstallation(config: InstallConfig): Promise<InstallationStatus> {
+    const hooks = await this.checkHooks();
+    const agents = await verifyAssetSymlink(
+      `${config.shakaHome}/system/agents`,
+      `${this.claudeHome}/agents`,
+      "agents",
+    );
+    const skills = await verifyAssetSymlink(
+      `${config.shakaHome}/system/skills`,
+      `${this.claudeHome}/skills`,
+      "skills",
+    );
+
+    return { hooks, agents, skills };
+  }
+
+  private async checkHooks(): Promise<{ ok: boolean; issue?: string }> {
     const settingsPath = `${this.claudeHome}/settings.json`;
     const file = Bun.file(settingsPath);
 
     if (!(await file.exists())) {
-      return { installed: false, issues: ["settings.json not found"] };
+      return { ok: false, issue: "settings.json not found" };
     }
 
     try {
       const settings = (await file.json()) as ClaudeSettings;
       const issue = this.findHookIssue(settings);
-      return issue ? { installed: false, issues: [issue] } : { installed: true, issues: [] };
+      return issue ? { ok: false, issue } : { ok: true };
     } catch {
-      return { installed: false, issues: ["Failed to parse settings.json"] };
+      return { ok: false, issue: "Failed to parse settings.json" };
     }
   }
 

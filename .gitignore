@@ -44,9 +44,6 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Experiments
 experiments
 
-# Docker persistent state (auth tokens)
-.docker-state
-
 # Plans (local development notes)
 plans
 
