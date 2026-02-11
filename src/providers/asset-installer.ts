@@ -52,7 +52,7 @@ async function installAssetSymlink(sourceDir: string, targetDir: string): Promis
     // Doesn't exist — will create
   }
 
-  await symlink(sourceDir, linkPath, "dir");
+  await symlink(sourceDir, linkPath, "junction");
 }
 
 /**

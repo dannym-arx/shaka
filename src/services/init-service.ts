@@ -165,7 +165,7 @@ export class InitService {
         await rm(linkPath);
       }
 
-      await symlink(target, linkPath, "dir");
+      await symlink(target, linkPath, "junction");
       symlinks.push(`${linkPath} → ${target}`);
 
       return ok(symlinks);
