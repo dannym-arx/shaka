@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { searchMemory } from "../../../src/memory/search";
 import {
   listSummaries,
@@ -22,7 +24,7 @@ import {
   OPENCODE_METADATA,
 } from "./fixtures";
 
-const testMemoryDir = "/tmp/shaka-test-pipeline";
+const testMemoryDir = join(tmpdir(), "shaka-test-pipeline");
 
 describe("Memory pipeline", () => {
   beforeEach(async () => {

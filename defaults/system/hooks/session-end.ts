@@ -12,6 +12,7 @@
  * Fail-open: any error logs to stderr and exits 0.
  */
 
+import { join } from "node:path";
 import {
   type NormalizedMessage,
   type SessionMetadata,
@@ -99,14 +100,15 @@ async function saveFailedOutput(
   sessionId: string,
   rawOutput: string,
 ): Promise<void> {
-  const failedDir = `${memoryDir}/sessions/failed`;
+  const failedDir = join(memoryDir, "sessions", "failed");
   const { mkdir } = await import("node:fs/promises");
   await mkdir(failedDir, { recursive: true });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
   const filename = `${timestamp}-${sessionId.slice(0, 8)}.txt`;
-  await Bun.write(`${failedDir}/${filename}`, rawOutput);
-  console.error(`Saved raw output to ${failedDir}/${filename}`);
+  const filePath = join(failedDir, filename);
+  await Bun.write(filePath, rawOutput);
+  console.error(`Saved raw output to ${filePath}`);
 }
 
 async function main() {
@@ -175,7 +177,7 @@ async function main() {
   if (!parsed) {
     console.error("Failed to parse inference output as summary");
     const shakaHome = resolveShakaHome();
-    const memoryDir = `${shakaHome}/memory`;
+    const memoryDir = join(shakaHome, "memory");
     await saveFailedOutput(memoryDir, sessionId, result.text);
     process.exit(0);
   }
@@ -185,7 +187,7 @@ async function main() {
 
   // Write summary to disk
   const shakaHome = resolveShakaHome();
-  const memoryDir = `${shakaHome}/memory`;
+  const memoryDir = join(shakaHome, "memory");
   const filePath = await writeSummary(memoryDir, summary);
   console.error(`Summary written to ${filePath}`);
 }

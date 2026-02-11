@@ -9,8 +9,9 @@
  * This means agent names include the "shaka/" prefix (e.g., "shaka/inference").
  */
 
-import { access, lstat, mkdir, readlink, rm, symlink } from "node:fs/promises";
+import { access, lstat, mkdir, symlink } from "node:fs/promises";
 import { join, resolve } from "node:path";
+import { readSymlinkTarget, removeLink } from "../platform/paths";
 import type { ComponentStatus } from "./types";
 
 /**
@@ -35,24 +36,25 @@ async function installAssetSymlink(sourceDir: string, targetDir: string): Promis
   await mkdir(targetDir, { recursive: true });
 
   try {
-    const stats = await lstat(linkPath);
+    await lstat(linkPath);
 
-    if (stats.isSymbolicLink()) {
-      const currentTarget = await readlink(linkPath);
-      if (resolve(currentTarget) === resolve(sourceDir)) {
-        return;
-      }
-      // Wrong target — remove and re-create
-      await rm(linkPath);
-    } else {
+    // readlink works for both symlinks and Windows junctions
+    const currentTarget = await readSymlinkTarget(linkPath);
+    if (currentTarget === null) {
       // Real directory exists — user has custom content, preserve it
       return;
     }
+    if (resolve(currentTarget) === resolve(sourceDir)) {
+      return;
+    }
+    // Wrong target — remove and re-create
+    await removeLink(linkPath);
   } catch {
     // Doesn't exist — will create
   }
 
-  await symlink(sourceDir, linkPath, "dir");
+  // "junction" requires no elevated privileges on Windows; ignored on Unix
+  await symlink(sourceDir, linkPath, "junction");
 }
 
 /**
@@ -66,14 +68,14 @@ async function uninstallAssetSymlink(sourceDir: string, targetDir: string): Prom
   const linkPath = join(targetDir, "shaka");
 
   try {
-    const stats = await lstat(linkPath);
-    if (!stats.isSymbolicLink()) {
-      return;
+    // readlink works for both symlinks and Windows junctions
+    const currentTarget = await readSymlinkTarget(linkPath);
+    if (currentTarget === null) {
+      return; // Not a symlink/junction — preserve it
     }
 
-    const currentTarget = await readlink(linkPath);
     if (resolve(currentTarget) === resolve(sourceDir)) {
-      await rm(linkPath);
+      await removeLink(linkPath);
     }
   } catch {
     // Doesn't exist — nothing to uninstall
@@ -96,13 +98,15 @@ export async function verifyAssetSymlink(
   const linkPath = join(targetDir, "shaka");
 
   try {
-    const stats = await lstat(linkPath);
-    if (!stats.isSymbolicLink()) {
+    await lstat(linkPath);
+
+    // readlink works for both symlinks and Windows junctions
+    const currentTarget = await readSymlinkTarget(linkPath);
+    if (currentTarget === null) {
       // Real directory — acceptable (user's custom setup)
       return { ok: true };
     }
 
-    const currentTarget = await readlink(linkPath);
     if (resolve(currentTarget) !== resolve(sourceDir)) {
       return {
         ok: false,

@@ -6,10 +6,12 @@
  * and tracks the installed version.
  */
 
-import { lstat, mkdir, readdir, readlink, rm, symlink } from "node:fs/promises";
+import { lstat, mkdir, readdir, symlink } from "node:fs/promises";
+import { join, resolve } from "node:path";
 import { Eta } from "eta";
 import { type Result, err, ok } from "../domain/result";
 import { getCurrentVersion } from "../domain/version";
+import { readSymlinkTarget, removeLink, resolveFromModule } from "../platform/paths";
 import {
   type DetectedProviders,
   type ProviderName,
@@ -17,8 +19,8 @@ import {
 } from "./provider-detection";
 
 // Resolve defaults directory relative to this module
-const DEFAULT_DEFAULTS_PATH = new URL("../../defaults", import.meta.url).pathname;
-const DEFAULT_REPO_ROOT = new URL("../..", import.meta.url).pathname;
+const DEFAULT_DEFAULTS_PATH = resolveFromModule(import.meta.url, "../../defaults");
+const DEFAULT_REPO_ROOT = resolveFromModule(import.meta.url, "../..");
 
 export interface InitServiceConfig {
   shakaHome: string;
@@ -27,7 +29,7 @@ export interface InitServiceConfig {
   /** Path to repo root (for bun link; for testing) */
   repoRoot?: string;
   /** Override provider detection (for testing) */
-  detectProviders?: () => Promise<DetectedProviders>;
+  detectProviders?: () => DetectedProviders | Promise<DetectedProviders>;
   /** Override bun link execution (for testing) */
   runBunLink?: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
 }
@@ -81,7 +83,7 @@ export class InitService {
   private readonly shakaHome: string;
   private readonly defaultsPath: string;
   private readonly repoRoot: string;
-  private readonly detectProviders: () => Promise<DetectedProviders>;
+  private readonly detectProviders: () => DetectedProviders | Promise<DetectedProviders>;
   private readonly runBunLink: (cwd: string, args: string[]) => Promise<Result<void, Error>>;
 
   constructor(config: InitServiceConfig) {
@@ -99,9 +101,9 @@ export class InitService {
   async createDirectories(): Promise<Result<string[], Error>> {
     const directories = [
       this.shakaHome,
-      `${this.shakaHome}/user`,
-      `${this.shakaHome}/memory`,
-      `${this.shakaHome}/customizations`,
+      join(this.shakaHome, "user"),
+      join(this.shakaHome, "memory"),
+      join(this.shakaHome, "customizations"),
     ];
 
     for (const dir of directories) {
@@ -129,41 +131,41 @@ export class InitService {
    * 4. system/ is a real directory → error (user must resolve manually)
    */
   async linkSystem(): Promise<Result<string[], Error>> {
-    const linkPath = `${this.shakaHome}/system`;
-    const target = `${this.defaultsPath}/system`;
+    const linkPath = join(this.shakaHome, "system");
+    const target = join(this.defaultsPath, "system");
     const symlinks: string[] = [];
 
     try {
       let exists = false;
-      let isLink = false;
 
       try {
-        const stats = await lstat(linkPath);
+        await lstat(linkPath);
         exists = true;
-        isLink = stats.isSymbolicLink();
       } catch {
         // Does not exist — will create
       }
 
-      if (exists && !isLink) {
-        return err(
-          new Error(
-            `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`,
-          ),
-        );
-      }
-
-      if (exists && isLink) {
-        const currentTarget = await readlink(linkPath);
-        if (currentTarget === target) {
+      if (exists) {
+        // readlink works for both symlinks and Windows junctions
+        const currentTarget = await readSymlinkTarget(linkPath);
+        if (currentTarget === null) {
+          // Real directory — not a symlink/junction
+          return err(
+            new Error(
+              `${linkPath} exists as a real directory. Move any custom files to customizations/ and remove system/, then re-run init.`,
+            ),
+          );
+        }
+        if (resolve(currentTarget) === resolve(target)) {
           // Already correct
           return ok(symlinks);
         }
         // Wrong target — remove and re-create
-        await rm(linkPath);
+        await removeLink(linkPath);
       }
 
-      await symlink(target, linkPath, "dir");
+      // "junction" requires no elevated privileges on Windows; ignored on Unix
+      await symlink(target, linkPath, "junction");
       symlinks.push(`${linkPath} → ${target}`);
 
       return ok(symlinks);
@@ -182,8 +184,8 @@ export class InitService {
    * to existing installations.
    */
   async copyUserTemplates(personalization?: Personalization): Promise<Result<string[], Error>> {
-    const sourceDir = `${this.defaultsPath}/user`;
-    const targetDir = `${this.shakaHome}/user`;
+    const sourceDir = join(this.defaultsPath, "user");
+    const targetDir = join(this.shakaHome, "user");
 
     let entries: string[];
     try {
@@ -226,13 +228,13 @@ export class InitService {
     for (const entry of entries) {
       const isTemplate = entry.endsWith(".eta");
       const outputName = isTemplate ? entry.slice(0, -4) : entry;
-      const targetPath = `${targetDir}/${outputName}`;
+      const targetPath = join(targetDir, outputName);
 
       if (await Bun.file(targetPath).exists()) {
         continue;
       }
 
-      const sourceFile = Bun.file(`${sourceDir}/${entry}`);
+      const sourceFile = Bun.file(join(sourceDir, entry));
       if (await sourceFile.exists()) {
         const raw = await sourceFile.text();
         const content = isTemplate ? eta.renderString(raw, templateData) : raw;
@@ -250,11 +252,11 @@ export class InitService {
    */
   async copyDefaultConfig(personalization?: Personalization): Promise<Result<string[], Error>> {
     const files: string[] = [];
-    const configPath = `${this.shakaHome}/config.json`;
+    const configPath = join(this.shakaHome, "config.json");
     const configFile = Bun.file(configPath);
 
     if (!(await configFile.exists())) {
-      const defaultConfigPath = `${this.defaultsPath}/config.json`;
+      const defaultConfigPath = join(this.defaultsPath, "config.json");
       const defaultConfig = Bun.file(defaultConfigPath);
 
       if (!(await defaultConfig.exists())) {
@@ -288,7 +290,7 @@ export class InitService {
    * Persists the user's provider selection so `shaka update` can re-use it.
    */
   async updateConfigProviders(providers: ProviderName[]): Promise<Result<void, Error>> {
-    const configPath = `${this.shakaHome}/config.json`;
+    const configPath = join(this.shakaHome, "config.json");
     const file = Bun.file(configPath);
 
     if (!(await file.exists())) return ok(undefined);

@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { removeLink } from "../../../../src/platform/paths";
 import { ClaudeProviderConfigurer } from "../../../../src/providers/claude/configurer";
 import {
   HOOK_EVENTS,
@@ -11,8 +14,8 @@ import {
 } from "../../../../src/providers/hook-discovery";
 
 describe("ClaudeProviderConfigurer", () => {
-  const testClaudeHome = "/tmp/shaka-test-claude";
-  const testShakaHome = "/tmp/shaka-test-shaka";
+  const testClaudeHome = join(tmpdir(), "shaka-test-claude");
+  const testShakaHome = join(tmpdir(), "shaka-test-shaka");
 
   beforeEach(async () => {
     await rm(testClaudeHome, { recursive: true, force: true });
@@ -166,10 +169,10 @@ console.log("hook-b");
       expect(shakaEntry).toBeDefined();
       expect(shakaEntry.hooks).toHaveLength(2);
       expect(shakaEntry.hooks.map((h: { command: string }) => h.command)).toContain(
-        `bun run ${testShakaHome}/system/hooks/hook-a.ts`,
+        `bun run ${join(testShakaHome, "system", "hooks", "hook-a.ts")}`,
       );
       expect(shakaEntry.hooks.map((h: { command: string }) => h.command)).toContain(
-        `bun run ${testShakaHome}/system/hooks/hook-b.ts`,
+        `bun run ${join(testShakaHome, "system", "hooks", "hook-b.ts")}`,
       );
     });
 
@@ -195,11 +198,11 @@ console.log("security");
 
       expect(bashEntry).toBeDefined();
       expect(bashEntry.hooks).toHaveLength(1);
-      expect(bashEntry.hooks[0].command).toBe(`bun run ${testShakaHome}/system/hooks/security.ts`);
+      expect(bashEntry.hooks[0].command).toBe(`bun run ${join(testShakaHome, "system", "hooks", "security.ts")}`);
 
       expect(editEntry).toBeDefined();
       expect(editEntry.hooks).toHaveLength(1);
-      expect(editEntry.hooks[0].command).toBe(`bun run ${testShakaHome}/system/hooks/security.ts`);
+      expect(editEntry.hooks[0].command).toBe(`bun run ${join(testShakaHome, "system", "hooks", "security.ts")}`);
     });
 
     test("handles mixed hooks with and without matchers", async () => {
@@ -281,7 +284,7 @@ console.log("custom");
         (h: { matcher?: string }) => !h.matcher,
       );
       expect(catchAll).toBeDefined();
-      expect(catchAll.hooks[0].command).toContain("customizations/hooks/custom-prompt.ts");
+      expect(catchAll.hooks[0].command).toContain(join("customizations", "hooks", "custom-prompt.ts"));
     });
   });
 
@@ -367,10 +370,10 @@ console.log("custom");
       await configurer.install({ shakaHome: testShakaHome });
 
       // Create a symlink pointing to wrong location
-      const agentsDir = `${testClaudeHome}/agents`;
-      await rm(`${agentsDir}/shaka`, { force: true });
+      const agentsDir = join(testClaudeHome, "agents");
+      await removeLink(join(agentsDir, "shaka"));
       await mkdir(agentsDir, { recursive: true });
-      await symlink("/wrong/path", `${agentsDir}/shaka`, "dir");
+      await symlink(join(tmpdir(), "shaka-test-wrong-path"), join(agentsDir, "shaka"), "junction");
 
       const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 
@@ -465,7 +468,7 @@ console.log("custom");
 });
 
 describe("Hook Discovery (shared)", () => {
-  const testShakaHome = "/tmp/shaka-test-discovery";
+  const testShakaHome = join(tmpdir(), "shaka-test-discovery");
 
   beforeEach(async () => {
     await rm(testShakaHome, { recursive: true, force: true });
@@ -503,58 +506,60 @@ console.log("test");
   });
 
   describe("parseHookTrigger", () => {
+    const hooksDir = () => join(testShakaHome, "system", "hooks");
+
     test("extracts triggers from exported array", async () => {
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/session-start.ts`);
+      const result = await parseHookTrigger(join(hooksDir(), "session-start.ts"));
       expect(result.events).toEqual(["session.start"]);
       expect(result.matchers).toBeUndefined();
     });
 
     test("extracts multiple triggers", async () => {
       await Bun.write(
-        `${testShakaHome}/system/hooks/multi-trigger.ts`,
+        join(hooksDir(), "multi-trigger.ts"),
         `export const TRIGGER = ["session.start", "prompt.submit"] as const;`,
       );
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/multi-trigger.ts`);
+      const result = await parseHookTrigger(join(hooksDir(), "multi-trigger.ts"));
       expect(result.events).toEqual(["session.start", "prompt.submit"]);
     });
 
     test("extracts matchers when present", async () => {
       await Bun.write(
-        `${testShakaHome}/system/hooks/with-matchers.ts`,
+        join(hooksDir(), "with-matchers.ts"),
         `export const TRIGGER = ["tool.before"] as const;
 export const MATCHER = ["Bash", "Edit"] as const;`,
       );
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/with-matchers.ts`);
+      const result = await parseHookTrigger(join(hooksDir(), "with-matchers.ts"));
       expect(result.events).toEqual(["tool.before"]);
       expect(result.matchers).toEqual(["Bash", "Edit"]);
     });
 
     test("returns empty events for file without TRIGGER export", async () => {
-      await Bun.write(`${testShakaHome}/system/hooks/no-trigger.ts`, "console.log('no trigger');");
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/no-trigger.ts`);
+      await Bun.write(join(hooksDir(), "no-trigger.ts"), "console.log('no trigger');");
+      const result = await parseHookTrigger(join(hooksDir(), "no-trigger.ts"));
       expect(result.events).toEqual([]);
     });
 
     test("filters out invalid TRIGGER values", async () => {
       await Bun.write(
-        `${testShakaHome}/system/hooks/invalid-trigger.ts`,
+        join(hooksDir(), "invalid-trigger.ts"),
         `export const TRIGGER = ["InvalidEvent", "session.start"] as const;`,
       );
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/invalid-trigger.ts`);
+      const result = await parseHookTrigger(join(hooksDir(), "invalid-trigger.ts"));
       expect(result.events).toEqual(["session.start"]);
     });
 
     test("returns empty events for non-array TRIGGER", async () => {
       await Bun.write(
-        `${testShakaHome}/system/hooks/string-trigger.ts`,
+        join(hooksDir(), "string-trigger.ts"),
         `export const TRIGGER = "session.start" as const;`,
       );
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/string-trigger.ts`);
+      const result = await parseHookTrigger(join(hooksDir(), "string-trigger.ts"));
       expect(result.events).toEqual([]);
     });
 
     test("returns empty events for non-existent file", async () => {
-      const result = await parseHookTrigger(`${testShakaHome}/system/hooks/nonexistent.ts`);
+      const result = await parseHookTrigger(join(hooksDir(), "nonexistent.ts"));
       expect(result.events).toEqual([]);
     });
   });
@@ -664,7 +669,7 @@ console.log("security");
       // System session-start.ts (session.start) replaced by custom (prompt.submit)
       expect(hooks).toHaveLength(1);
       expect(hooks[0]?.event).toBe("prompt.submit");
-      expect(hooks[0]?.path).toContain("/customizations/hooks/");
+      expect(hooks[0]?.path).toContain(join("customizations", "hooks"));
     });
 
     test("works when customizations/hooks/ does not exist", async () => {
@@ -674,7 +679,7 @@ console.log("security");
     });
 
     test("works when system/hooks/ does not exist", async () => {
-      const emptyHome = "/tmp/shaka-test-empty-home";
+      const emptyHome = join(tmpdir(), "shaka-test-empty-home");
       await rm(emptyHome, { recursive: true, force: true });
       await mkdir(emptyHome, { recursive: true });
 

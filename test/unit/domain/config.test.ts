@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { homedir, tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   type ShakaConfig,
   getAssistantName,
@@ -103,16 +105,22 @@ describe("Config", () => {
         XDG_CONFIG_HOME: "/custom/config",
         HOME: "/home/user",
       });
-      expect(home).toBe("/custom/config/shaka");
+      expect(home).toBe(join("/custom/config", "shaka"));
     });
 
     test("falls back to ~/.config/shaka", () => {
       const home = resolveShakaHome({ HOME: "/home/user" });
-      expect(home).toBe("/home/user/.config/shaka");
+      expect(home).toBe(join("/home/user", ".config", "shaka"));
     });
 
-    test("throws if HOME not set", () => {
-      expect(() => resolveShakaHome({})).toThrow("HOME environment variable not set");
+    test("uses USERPROFILE when HOME is not set", () => {
+      const home = resolveShakaHome({ USERPROFILE: "C:\\Users\\test" });
+      expect(home).toBe(join("C:\\Users\\test", ".config", "shaka"));
+    });
+
+    test("falls back to os.homedir() when no env vars set", () => {
+      const home = resolveShakaHome({});
+      expect(home).toBe(join(homedir(), ".config", "shaka"));
     });
 
     test("uses process.env when no argument provided", () => {
@@ -124,7 +132,7 @@ describe("Config", () => {
   });
 
   describe("loadConfig", () => {
-    const testShakaHome = "/tmp/shaka-test-config";
+    const testShakaHome = join(tmpdir(), "shaka-test-config");
     const validConfig: ShakaConfig = {
       version: "0.1.0",
       reasoning: { enabled: true },
@@ -176,7 +184,7 @@ describe("Config", () => {
   });
 
   describe("loadShakaFile", () => {
-    const testShakaHome = "/tmp/shaka-test-files";
+    const testShakaHome = join(tmpdir(), "shaka-test-files");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -225,7 +233,7 @@ describe("Config", () => {
   });
 
   describe("getAssistantName", () => {
-    const testShakaHome = "/tmp/shaka-test-assistant";
+    const testShakaHome = join(tmpdir(), "shaka-test-assistant");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -257,7 +265,7 @@ describe("Config", () => {
   });
 
   describe("getPrincipalName", () => {
-    const testShakaHome = "/tmp/shaka-test-principal";
+    const testShakaHome = join(tmpdir(), "shaka-test-principal");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -289,7 +297,7 @@ describe("Config", () => {
   });
 
   describe("getSummarizationModel", () => {
-    const testShakaHome = "/tmp/shaka-test-summ-model";
+    const testShakaHome = join(tmpdir(), "shaka-test-summ-model");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -411,6 +419,12 @@ describe("Config", () => {
 
     test("returns true when OPENCODE_AGENT_ID is set", () => {
       expect(isSubagent({ OPENCODE_AGENT_ID: "agent-123" })).toBe(true);
+    });
+
+    test("detects Claude Agents path with Windows backslashes", () => {
+      expect(isSubagent({ CLAUDE_PROJECT_DIR: "C:\\Users\\test\\.claude\\Agents\\task-123" })).toBe(
+        true,
+      );
     });
   });
 });

@@ -4,6 +4,7 @@
  * Manages shaka configuration values with get/set subcommands.
  */
 
+import { join } from "node:path";
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
 
@@ -116,9 +117,10 @@ export function createConfigCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
 
-      const configPath = `${shakaHome}/config.json`;
+      const configPath = join(shakaHome, "config.json");
       const file = Bun.file(configPath);
 
       if (!(await file.exists())) {
@@ -164,9 +166,10 @@ export function createConfigCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
 
-      const configPath = `${shakaHome}/config.json`;
+      const configPath = join(shakaHome, "config.json");
       const file = Bun.file(configPath);
 
       if (!(await file.exists())) {

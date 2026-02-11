@@ -11,6 +11,8 @@
  */
 
 import { readdir } from "node:fs/promises";
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 
 /**
  * Shaka's canonical hook event names.
@@ -52,7 +54,9 @@ interface ParsedHook {
 export async function parseHookTrigger(filePath: string): Promise<ParsedHook> {
   try {
     // Add cache-busting to ensure fresh import (important for tests and hot-reload)
-    const module = await import(`${filePath}?t=${Date.now()}`);
+    // Use file:// URL so import() works on Windows (bare paths like C:\... fail)
+    const fileUrl = `${pathToFileURL(filePath).href}?t=${Date.now()}`;
+    const module = await import(fileUrl);
     const trigger = module.TRIGGER;
     const matcher = module.MATCHER;
 
@@ -89,7 +93,7 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
     for (const entry of entries) {
       if (!entry.endsWith(".ts")) continue;
 
-      const filePath = `${hooksDir}/${entry}`;
+      const filePath = join(hooksDir, entry);
       const { events, matchers } = await parseHookTrigger(filePath);
 
       for (const event of events) {
@@ -114,8 +118,8 @@ export async function discoverHooks(hooksDir: string): Promise<DiscoveredHook[]>
  * Additional hooks in customizations/ (no system counterpart) are appended.
  */
 export async function discoverAllHooks(shakaHome: string): Promise<DiscoveredHook[]> {
-  const systemHooks = await discoverHooks(`${shakaHome}/system/hooks`);
-  const customHooks = await discoverHooks(`${shakaHome}/customizations/hooks`);
+  const systemHooks = await discoverHooks(join(shakaHome, "system", "hooks"));
+  const customHooks = await discoverHooks(join(shakaHome, "customizations", "hooks"));
 
   // Customization filenames that override system counterparts
   const overridden = new Set(customHooks.map((h) => h.filename));

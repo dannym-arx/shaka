@@ -1,10 +1,13 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { removeLink } from "../../../../src/platform/paths";
 import { OpencodeProviderConfigurer } from "../../../../src/providers/opencode/configurer";
 
 describe("OpencodeProviderConfigurer", () => {
-  const testProjectRoot = "/tmp/shaka-test-opencode-project";
-  const testShakaHome = "/tmp/shaka-test-shaka";
+  const testProjectRoot = join(tmpdir(), "shaka-test-opencode-project");
+  const testShakaHome = join(tmpdir(), "shaka-test-shaka");
 
   beforeEach(async () => {
     await rm(testProjectRoot, { recursive: true, force: true });
@@ -65,11 +68,12 @@ You are a text-only inference assistant.
 
       await configurer.install({ shakaHome: testShakaHome });
 
-      const pluginFile = Bun.file(`${testProjectRoot}/plugins/shaka.ts`);
+      const pluginFile = Bun.file(join(testProjectRoot, "plugins", "shaka.ts"));
       expect(await pluginFile.exists()).toBe(true);
       const content = await pluginFile.text();
       expect(content).toContain("SHAKA_HOME");
-      expect(content).toContain(testShakaHome);
+      // Path is JSON-stringified in the generated plugin (backslashes escaped on Windows)
+      expect(content).toContain(JSON.stringify(testShakaHome));
     });
 
     test("plugin includes discovered hooks in header comment", async () => {
@@ -440,10 +444,10 @@ console.log("format");
       await configurer.install({ shakaHome: testShakaHome });
 
       // Create a symlink pointing to wrong location
-      const agentsDir = `${testProjectRoot}/agents`;
-      await rm(`${agentsDir}/shaka`, { force: true });
+      const agentsDir = join(testProjectRoot, "agents");
+      await removeLink(join(agentsDir, "shaka"));
       await mkdir(agentsDir, { recursive: true });
-      await symlink("/wrong/path", `${agentsDir}/shaka`, "dir");
+      await symlink(join(tmpdir(), "shaka-test-wrong-path"), join(agentsDir, "shaka"), "junction");
 
       const result = await configurer.checkInstallation({ shakaHome: testShakaHome });
 

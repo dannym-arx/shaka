@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
+import { resolveFromModule } from "../../../src/platform/paths";
 import { InitService } from "../../../src/services/init-service";
 import { UninstallService } from "../../../src/services/uninstall-service";
 
 describe("UninstallService", () => {
-  const testHome = "/tmp/shaka-test-uninstall";
-  const defaultsPath = new URL("../../../defaults", import.meta.url).pathname;
+  const testHome = join(tmpdir(), "shaka-test-uninstall");
+  const defaultsPath = resolveFromModule(import.meta.url, "../../../defaults");
 
   const mockBunLink = async (): Promise<Result<void, Error>> => ok(undefined);
 
@@ -56,7 +59,7 @@ describe("UninstallService", () => {
 
       // Verify symlink is gone
       try {
-        await lstat(`${testHome}/system`);
+        await lstat(join(testHome, "system"));
         throw new Error("system/ should not exist");
       } catch (e: unknown) {
         expect((e as NodeJS.ErrnoException).code).toBe("ENOENT");
@@ -64,7 +67,7 @@ describe("UninstallService", () => {
     });
 
     test("does not remove real directory", async () => {
-      await mkdir(`${testHome}/system`, { recursive: true });
+      await mkdir(join(testHome, "system"), { recursive: true });
       const service = createService();
 
       const result = await service.removeSystemLink();
@@ -73,7 +76,7 @@ describe("UninstallService", () => {
       if (result.ok) expect(result.value).toBe(false);
 
       // Real directory still exists
-      const stats = await lstat(`${testHome}/system`);
+      const stats = await lstat(join(testHome, "system"));
       expect(stats.isDirectory()).toBe(true);
     });
 
@@ -94,14 +97,14 @@ describe("UninstallService", () => {
       const service = createService();
 
       // Verify file exists before
-      expect(await Bun.file(`${testHome}/config.json`).exists()).toBe(true);
+      expect(await Bun.file(join(testHome, "config.json")).exists()).toBe(true);
 
       const removed = await service.removeFrameworkFiles();
 
-      expect(removed).toContain(`${testHome}/config.json`);
+      expect(removed).toContain(join(testHome, "config.json"));
 
       // Verify file is gone
-      expect(await Bun.file(`${testHome}/config.json`).exists()).toBe(false);
+      expect(await Bun.file(join(testHome, "config.json")).exists()).toBe(false);
     });
 
     test("handles missing files gracefully", async () => {
@@ -118,14 +121,14 @@ describe("UninstallService", () => {
     test("removes user/, customizations/, memory/", async () => {
       await setupInitializedHome();
       // Add some user content
-      await writeFile(`${testHome}/user/user.md`, "custom content");
+      await writeFile(join(testHome, "user", "user.md"), "custom content");
 
       const service = createService();
       const removed = await service.removeUserData();
 
-      expect(removed).toContain(`${testHome}/user`);
-      expect(removed).toContain(`${testHome}/customizations`);
-      expect(removed).toContain(`${testHome}/memory`);
+      expect(removed).toContain(join(testHome, "user"));
+      expect(removed).toContain(join(testHome, "customizations"));
+      expect(removed).toContain(join(testHome, "memory"));
     });
 
     test("handles missing directories gracefully", async () => {
@@ -150,7 +153,7 @@ describe("UninstallService", () => {
 
     test("keeps non-empty shakaHome", async () => {
       await mkdir(testHome, { recursive: true });
-      await writeFile(`${testHome}/leftover.txt`, "data");
+      await writeFile(join(testHome, "leftover.txt"), "data");
       const service = createService();
 
       const removed = await service.removeShakaHomeIfEmpty();
@@ -169,11 +172,11 @@ describe("UninstallService", () => {
       expect(result.ok).toBe(true);
       if (result.ok) {
         // Framework items removed
-        expect(result.value.removed).toContain(`${testHome}/system`);
-        expect(result.value.removed).toContain(`${testHome}/config.json`);
+        expect(result.value.removed).toContain(join(testHome, "system"));
+        expect(result.value.removed).toContain(join(testHome, "config.json"));
 
         // User dirs still exist
-        const userStats = await lstat(`${testHome}/user`);
+        const userStats = await lstat(join(testHome, "user"));
         expect(userStats.isDirectory()).toBe(true);
       }
     });
@@ -186,9 +189,9 @@ describe("UninstallService", () => {
 
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.removed).toContain(`${testHome}/user`);
-        expect(result.value.removed).toContain(`${testHome}/customizations`);
-        expect(result.value.removed).toContain(`${testHome}/memory`);
+        expect(result.value.removed).toContain(join(testHome, "user"));
+        expect(result.value.removed).toContain(join(testHome, "customizations"));
+        expect(result.value.removed).toContain(join(testHome, "memory"));
 
         // shakaHome itself should be removed (now empty)
         expect(result.value.removed).toContain(testHome);

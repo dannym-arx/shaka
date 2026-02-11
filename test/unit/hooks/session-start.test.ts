@@ -58,7 +58,7 @@ describe("unmodified template detection", () => {
         principal: { name: "Tester" },
       }),
     );
-    await symlink(`${defaultsDir}/system`, `${fakeShakaHome}/system`, "dir");
+    await symlink(`${defaultsDir}/system`, `${fakeShakaHome}/system`, "junction");
   });
 
   afterAll(async () => {

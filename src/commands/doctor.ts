@@ -3,6 +3,7 @@
  * Checks system health, installation status, and config-vs-reality alignment.
  */
 
+import { join } from "node:path";
 import { Command } from "commander";
 import { type ShakaConfig, loadConfig, resolveShakaHome } from "../domain/config";
 import { getAllProviders } from "../providers/registry";
@@ -12,7 +13,7 @@ import { printOpencodeSummarizationHint } from "./hints";
 async function checkShakaHome(shakaHome: string): Promise<boolean> {
   console.log(`Shaka home: ${shakaHome}`);
 
-  const configFile = Bun.file(`${shakaHome}/config.json`);
+  const configFile = Bun.file(join(shakaHome, "config.json"));
   if (await configFile.exists()) {
     console.log("  ✓ config.json exists");
     return false;
@@ -80,7 +81,7 @@ async function collectProviderStatuses(shakaHome: string): Promise<ProviderCheck
   const results: ProviderCheckResult[] = [];
 
   for (const provider of providers) {
-    const cliInstalled = await provider.isInstalled();
+    const cliInstalled = provider.isInstalled();
     const status = await provider.checkInstallation({ shakaHome });
     results.push({ provider, cliInstalled, status });
   }
@@ -135,7 +136,7 @@ async function fixConfigAlignment(
   shakaHome: string,
   mismatches: ProviderMismatch[],
 ): Promise<void> {
-  const configPath = `${shakaHome}/config.json`;
+  const configPath = join(shakaHome, "config.json");
   const file = Bun.file(configPath);
 
   if (!(await file.exists())) {
@@ -176,7 +177,7 @@ async function recheckAfterFix(shakaHome: string): Promise<boolean> {
   const providers = getAllProviders();
 
   for (const provider of providers) {
-    const cliInstalled = await provider.isInstalled();
+    const cliInstalled = provider.isInstalled();
     const status = await provider.checkInstallation({ shakaHome });
     const enabled = config?.providers[provider.name].enabled ?? false;
     if (enabled && cliInstalled && !isFullyInstalled(status)) {
@@ -209,6 +210,7 @@ export function createDoctorCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
 
       let hasIssues = await checkShakaHome(shakaHome);

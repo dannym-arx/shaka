@@ -2,6 +2,8 @@
  * Semver utilities and git version detection.
  */
 
+import { resolveFromModule } from "../platform/paths";
+
 export interface SemVer {
   major: number;
   minor: number;
@@ -56,7 +58,7 @@ export function compareSemver(a: string, b: string): -1 | 0 | 1 {
  * Get the current shaka version from package.json.
  */
 export function getCurrentVersion(): string {
-  const pkgPath = new URL("../../package.json", import.meta.url).pathname;
+  const pkgPath = resolveFromModule(import.meta.url, "../../package.json");
   const pkg = JSON.parse(require("node:fs").readFileSync(pkgPath, "utf-8"));
   return pkg.version;
 }
@@ -112,7 +114,7 @@ export async function findLatestTag(repoRoot: string): Promise<string | null> {
   const output = await git(["tag", "-l", "v*.*.*", "--sort=-version:refname"], repoRoot);
   if (!output) return null;
 
-  for (const tag of output.split("\n")) {
+  for (const tag of output.split(/\r?\n/)) {
     if (parseSemver(stripV(tag))) return tag;
   }
 

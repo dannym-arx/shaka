@@ -1,9 +1,11 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { discoverTools, isToolDefinition } from "../../../src/mcp/tool-discovery";
 
 describe("default tools", () => {
-  const defaultToolsDir = `${import.meta.dir}/../../../defaults/system/tools`;
+  const defaultToolsDir = join(import.meta.dir, "..", "..", "..", "defaults", "system", "tools");
 
   test("memory-search tool is discoverable", async () => {
     const tools = await discoverTools(defaultToolsDir);
@@ -21,7 +23,7 @@ describe("default tools", () => {
 });
 
 describe("tool-discovery", () => {
-  const testToolsDir = "/tmp/shaka-test-tools";
+  const testToolsDir = join(tmpdir(), "shaka-test-tools");
 
   beforeEach(async () => {
     await rm(testToolsDir, { recursive: true, force: true });

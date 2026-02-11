@@ -74,7 +74,9 @@ function logResult(result: UninstallResult, deleteUserData: boolean, shakaHome: 
 
   if (!deleteUserData) {
     console.log(`   Your data is still at ${shakaHome}/`);
-    console.log(`   To remove it: rm -rf ${shakaHome}`);
+    const removeCmd =
+      process.platform === "win32" ? `rmdir /s /q "${shakaHome}"` : `rm -rf ${shakaHome}`;
+    console.log(`   To remove it: ${removeCmd}`);
   }
 }
 
@@ -88,6 +90,7 @@ export function createUninstallCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
 
       const service = new UninstallService({ shakaHome });

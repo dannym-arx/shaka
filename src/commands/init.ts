@@ -9,6 +9,7 @@ import { createInterface } from "node:readline";
 import { Command } from "commander";
 import { loadConfig, resolveShakaHome } from "../domain/config";
 import { findNewerLocalTag, getGitRef } from "../domain/version";
+import { resolveFromModule } from "../platform/paths";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
 import { createProvider } from "../providers/registry";
 import type { ProviderName } from "../providers/types";
@@ -196,7 +197,7 @@ function logCreatedItems(result: InitResult): void {
 }
 
 async function logVersionInfo(result: InitResult): Promise<void> {
-  const repoRoot = new URL("../..", import.meta.url).pathname;
+  const repoRoot = resolveFromModule(import.meta.url, "../..");
   const ref = await getGitRef(repoRoot);
   const refLabel = ref
     ? ref.type === "tag"
@@ -225,6 +226,7 @@ export function createInitCommand(): Command {
         SHAKA_HOME: process.env.SHAKA_HOME,
         XDG_CONFIG_HOME: process.env.XDG_CONFIG_HOME,
         HOME: process.env.HOME,
+        USERPROFILE: process.env.USERPROFILE,
       });
 
       console.log("Initializing Shaka...\n");

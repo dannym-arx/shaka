@@ -6,6 +6,7 @@
  * tools from directories, but does not contain tool implementations itself.
  */
 
+import { join } from "node:path";
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
 import { McpServer } from "../mcp/server";
@@ -21,8 +22,8 @@ function createServeCommand(): Command {
 
       // Discover tools from system/tools and customizations/tools
       // Customization tools override system tools on name collision
-      const systemToolsDir = `${shakaHome}/system/tools`;
-      const customToolsDir = `${shakaHome}/customizations/tools`;
+      const systemToolsDir = join(shakaHome, "system", "tools");
+      const customToolsDir = join(shakaHome, "customizations", "tools");
 
       const tools = await discoverToolsWithOverrides(systemToolsDir, customToolsDir);
       for (const tool of tools) {

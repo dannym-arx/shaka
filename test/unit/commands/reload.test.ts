@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ClaudeProviderConfigurer } from "../../../src/providers/claude/configurer";
 
 describe("reload (integration)", () => {
-  const testClaudeHome = "/tmp/shaka-test-reload-claude";
-  const testShakaHome = "/tmp/shaka-test-reload-shaka";
+  const testClaudeHome = join(tmpdir(), "shaka-test-reload-claude");
+  const testShakaHome = join(tmpdir(), "shaka-test-reload-shaka");
 
   beforeEach(async () => {
     await rm(testClaudeHome, { recursive: true, force: true });
@@ -43,7 +45,7 @@ describe("reload (integration)", () => {
     settings = await Bun.file(`${testClaudeHome}/settings.json`).json();
     expect(settings.hooks.UserPromptSubmit).toBeDefined();
     const entry = settings.hooks.UserPromptSubmit.find((h: { matcher?: string }) => !h.matcher);
-    expect(entry.hooks[0].command).toContain("customizations/hooks/my-hook.ts");
+    expect(entry.hooks[0].command).toContain(join("customizations", "hooks", "my-hook.ts"));
   });
 
   test("reload picks up removed hooks", async () => {

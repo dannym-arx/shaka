@@ -14,6 +14,7 @@
 
 import { mkdir, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
+import { join } from "node:path";
 import { type Result, err, ok } from "../../domain/result";
 import { installAssetSymlink, uninstallAssetSymlink, verifyAssetSymlink } from "../asset-installer";
 import { type DiscoveredHook, discoverAllHooks } from "../hook-discovery";
@@ -22,7 +23,7 @@ import type { InstallConfig, InstallationStatus, ProviderConfigurer } from "../t
 /** Resolve the global opencode config directory (XDG-compliant). */
 function defaultOpencodeConfigDir(): string {
   const xdg = process.env.XDG_CONFIG_HOME;
-  return xdg ? `${xdg}/opencode` : `${homedir()}/.config/opencode`;
+  return xdg ? join(xdg, "opencode") : join(homedir(), ".config", "opencode");
 }
 
 export class OpencodeProviderConfigurer implements ProviderConfigurer {
@@ -33,24 +34,20 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
     this.opencodeConfigDir = options?.opencodeConfigDir ?? defaultOpencodeConfigDir();
   }
 
-  async isInstalled(): Promise<boolean> {
-    const proc = Bun.spawn(["which", "opencode"], {
-      stdout: "pipe",
-      stderr: "pipe",
-    });
-    return (await proc.exited) === 0;
+  isInstalled(): boolean {
+    return Bun.which("opencode") !== null;
   }
 
   async install(config: InstallConfig): Promise<Result<void, Error>> {
     try {
-      const pluginsDir = `${this.opencodeConfigDir}/plugins`;
+      const pluginsDir = join(this.opencodeConfigDir, "plugins");
       await mkdir(pluginsDir, { recursive: true });
 
       // Discover hooks from system/ and customizations/
       const hooks = await discoverAllHooks(config.shakaHome);
 
       // Generate plugin
-      const pluginPath = `${pluginsDir}/shaka.ts`;
+      const pluginPath = join(pluginsDir, "shaka.ts");
       const pluginContent = this.generatePluginContent(config, hooks);
       await Bun.write(pluginPath, pluginContent);
 
@@ -63,14 +60,14 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 
       // Install agents from defaults/system/agents/
       await installAssetSymlink(
-        `${config.shakaHome}/system/agents`,
-        `${this.opencodeConfigDir}/agents`,
+        join(config.shakaHome, "system", "agents"),
+        join(this.opencodeConfigDir, "agents"),
       );
 
       // Install skills from defaults/system/skills/
       await installAssetSymlink(
-        `${config.shakaHome}/system/skills`,
-        `${this.opencodeConfigDir}/skills`,
+        join(config.shakaHome, "system", "skills"),
+        join(this.opencodeConfigDir, "skills"),
       );
 
       return ok(undefined);
@@ -98,7 +95,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 
   async uninstall(config: InstallConfig): Promise<Result<void, Error>> {
     try {
-      const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
+      const pluginPath = join(this.opencodeConfigDir, "plugins", "shaka.ts");
       const pluginFile = Bun.file(pluginPath);
       if (await pluginFile.exists()) {
         await unlink(pluginPath);
@@ -106,12 +103,12 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 
       // Remove agents and skills installed by shaka
       await uninstallAssetSymlink(
-        `${config.shakaHome}/system/agents`,
-        `${this.opencodeConfigDir}/agents`,
+        join(config.shakaHome, "system", "agents"),
+        join(this.opencodeConfigDir, "agents"),
       );
       await uninstallAssetSymlink(
-        `${config.shakaHome}/system/skills`,
-        `${this.opencodeConfigDir}/skills`,
+        join(config.shakaHome, "system", "skills"),
+        join(this.opencodeConfigDir, "skills"),
       );
 
       return ok(undefined);
@@ -123,13 +120,13 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
   async checkInstallation(config: InstallConfig): Promise<InstallationStatus> {
     const hooks = await this.checkHooks();
     const agents = await verifyAssetSymlink(
-      `${config.shakaHome}/system/agents`,
-      `${this.opencodeConfigDir}/agents`,
+      join(config.shakaHome, "system", "agents"),
+      join(this.opencodeConfigDir, "agents"),
       "agents",
     );
     const skills = await verifyAssetSymlink(
-      `${config.shakaHome}/system/skills`,
-      `${this.opencodeConfigDir}/skills`,
+      join(config.shakaHome, "system", "skills"),
+      join(this.opencodeConfigDir, "skills"),
       "skills",
     );
 
@@ -137,7 +134,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
   }
 
   private async checkHooks(): Promise<{ ok: boolean; issue?: string }> {
-    const pluginPath = `${this.opencodeConfigDir}/plugins/shaka.ts`;
+    const pluginPath = join(this.opencodeConfigDir, "plugins", "shaka.ts");
     const pluginFile = Bun.file(pluginPath);
     if (!(await pluginFile.exists())) {
       return { ok: false, issue: "shaka.ts plugin not found" };
@@ -167,7 +164,7 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
 ${hooks.map((h) => ` *   - ${h.filename} (${h.event}${h.matchers ? `, matchers: ${h.matchers.join(", ")}` : ""})`).join("\n")}
  */
 
-const SHAKA_HOME = "${config.shakaHome}";
+const SHAKA_HOME = ${JSON.stringify(config.shakaHome)};
 const IDLE_SUMMARY_DELAY = 15_000;
 
 interface ClaudeHookInput {

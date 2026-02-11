@@ -5,6 +5,7 @@
  * can look up past decisions, context, and work history.
  */
 
+import { join } from "node:path";
 import { resolveShakaHome, searchMemory } from "shaka";
 
 export default {
@@ -29,7 +30,7 @@ export default {
     if (!query) return "Error: query is required";
 
     const shakaHome = resolveShakaHome();
-    const memoryDir = `${shakaHome}/memory`;
+    const memoryDir = join(shakaHome, "memory");
     const results = await searchMemory(query, memoryDir);
 
     if (results.length === 0) {
