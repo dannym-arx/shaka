@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ClaudeProviderConfigurer } from "../../../../src/providers/claude/configurer";
 import {
   HOOK_EVENTS,
@@ -11,8 +13,8 @@ import {
 } from "../../../../src/providers/hook-discovery";
 
 describe("ClaudeProviderConfigurer", () => {
-  const testClaudeHome = "/tmp/shaka-test-claude";
-  const testShakaHome = "/tmp/shaka-test-shaka";
+  const testClaudeHome = join(tmpdir(), "shaka-test-claude");
+  const testShakaHome = join(tmpdir(), "shaka-test-shaka");
 
   beforeEach(async () => {
     await rm(testClaudeHome, { recursive: true, force: true });
@@ -465,7 +467,7 @@ console.log("custom");
 });
 
 describe("Hook Discovery (shared)", () => {
-  const testShakaHome = "/tmp/shaka-test-discovery";
+  const testShakaHome = join(tmpdir(), "shaka-test-discovery");
 
   beforeEach(async () => {
     await rm(testShakaHome, { recursive: true, force: true });
@@ -674,7 +676,7 @@ console.log("security");
     });
 
     test("works when system/hooks/ does not exist", async () => {
-      const emptyHome = "/tmp/shaka-test-empty-home";
+      const emptyHome = join(tmpdir(), "shaka-test-empty-home");
       await rm(emptyHome, { recursive: true, force: true });
       await mkdir(emptyHome, { recursive: true });
 

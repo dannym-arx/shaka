@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { printOpencodeSummarizationHint } from "../../../src/commands/hints";
 import type { ShakaConfig } from "../../../src/domain/config";
 
 describe("hints", () => {
-  const testShakaHome = "/tmp/shaka-test-hints";
+  const testShakaHome = join(tmpdir(), "shaka-test-hints");
 
   const validConfig: ShakaConfig = {
     version: "0.1.0",

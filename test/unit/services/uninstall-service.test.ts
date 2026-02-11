@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
@@ -8,7 +9,7 @@ import { InitService } from "../../../src/services/init-service";
 import { UninstallService } from "../../../src/services/uninstall-service";
 
 describe("UninstallService", () => {
-  const testHome = "/tmp/shaka-test-uninstall";
+  const testHome = join(tmpdir(), "shaka-test-uninstall");
   const defaultsPath = resolveFromModule(import.meta.url, "../../../defaults");
 
   const mockBunLink = async (): Promise<Result<void, Error>> => ok(undefined);

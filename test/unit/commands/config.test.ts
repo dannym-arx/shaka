@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getPath, parseValue, setPath } from "../../../src/commands/config";
 
 describe("config command utilities", () => {
@@ -217,7 +219,7 @@ describe("config command utilities", () => {
 });
 
 describe("config command integration", () => {
-  const testShakaHome = "/tmp/shaka-test-config-cmd";
+  const testShakaHome = join(tmpdir(), "shaka-test-config-cmd");
 
   beforeEach(async () => {
     await rm(testShakaHome, { recursive: true, force: true });

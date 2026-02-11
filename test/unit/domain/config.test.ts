@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type ShakaConfig,
@@ -132,7 +132,7 @@ describe("Config", () => {
   });
 
   describe("loadConfig", () => {
-    const testShakaHome = "/tmp/shaka-test-config";
+    const testShakaHome = join(tmpdir(), "shaka-test-config");
     const validConfig: ShakaConfig = {
       version: "0.1.0",
       reasoning: { enabled: true },
@@ -184,7 +184,7 @@ describe("Config", () => {
   });
 
   describe("loadShakaFile", () => {
-    const testShakaHome = "/tmp/shaka-test-files";
+    const testShakaHome = join(tmpdir(), "shaka-test-files");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -233,7 +233,7 @@ describe("Config", () => {
   });
 
   describe("getAssistantName", () => {
-    const testShakaHome = "/tmp/shaka-test-assistant";
+    const testShakaHome = join(tmpdir(), "shaka-test-assistant");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -265,7 +265,7 @@ describe("Config", () => {
   });
 
   describe("getPrincipalName", () => {
-    const testShakaHome = "/tmp/shaka-test-principal";
+    const testShakaHome = join(tmpdir(), "shaka-test-principal");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });
@@ -297,7 +297,7 @@ describe("Config", () => {
   });
 
   describe("getSummarizationModel", () => {
-    const testShakaHome = "/tmp/shaka-test-summ-model";
+    const testShakaHome = join(tmpdir(), "shaka-test-summ-model");
 
     beforeEach(async () => {
       await rm(testShakaHome, { recursive: true, force: true });

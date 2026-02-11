@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { type SearchResult, searchMemory } from "../../../src/memory/search";
 import { writeSummary } from "../../../src/memory/storage";
 import type { SessionSummary } from "../../../src/memory/summarize";
 
-const testMemoryDir = "/tmp/shaka-test-search";
+const testMemoryDir = join(tmpdir(), "shaka-test-search");
 
 function makeSummary(
   overrides: Partial<{

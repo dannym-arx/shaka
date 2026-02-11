@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, readlink, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Result } from "../../../src/domain/result";
 import { ok } from "../../../src/domain/result";
@@ -7,7 +8,7 @@ import { resolveFromModule } from "../../../src/platform/paths";
 import { InitService } from "../../../src/services/init-service";
 
 describe("InitService", () => {
-  const testHome = "/tmp/shaka-test-init";
+  const testHome = join(tmpdir(), "shaka-test-init");
   const defaultsPath = resolveFromModule(import.meta.url, "../../../defaults");
 
   // Mock bun link — always succeeds, never runs real bun link

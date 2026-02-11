@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { lstat, mkdir, readlink, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { installAssetSymlink, uninstallAssetSymlink } from "../../../src/providers/asset-installer";
 
 describe("asset-installer", () => {
-  const testSourceDir = "/tmp/shaka-test-source";
-  const testTargetDir = "/tmp/shaka-test-target";
+  const testSourceDir = join(tmpdir(), "shaka-test-source");
+  const testTargetDir = join(tmpdir(), "shaka-test-target");
 
   beforeEach(async () => {
     await rm(testSourceDir, { recursive: true, force: true });

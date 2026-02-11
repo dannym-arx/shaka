@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { OpencodeProviderConfigurer } from "../../../../src/providers/opencode/configurer";
 
 describe("OpencodeProviderConfigurer", () => {
-  const testProjectRoot = "/tmp/shaka-test-opencode-project";
-  const testShakaHome = "/tmp/shaka-test-shaka";
+  const testProjectRoot = join(tmpdir(), "shaka-test-opencode-project");
+  const testShakaHome = join(tmpdir(), "shaka-test-shaka");
 
   beforeEach(async () => {
     await rm(testProjectRoot, { recursive: true, force: true });

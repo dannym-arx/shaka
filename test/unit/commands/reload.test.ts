@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { ClaudeProviderConfigurer } from "../../../src/providers/claude/configurer";
 
 describe("reload (integration)", () => {
-  const testClaudeHome = "/tmp/shaka-test-reload-claude";
-  const testShakaHome = "/tmp/shaka-test-reload-shaka";
+  const testClaudeHome = join(tmpdir(), "shaka-test-reload-claude");
+  const testShakaHome = join(tmpdir(), "shaka-test-reload-shaka");
 
   beforeEach(async () => {
     await rm(testClaudeHome, { recursive: true, force: true });
