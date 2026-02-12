@@ -201,9 +201,14 @@ async function listSkillDirs(dir: string): Promise<string[]> {
 async function readLine(): Promise<string> {
   return new Promise((resolve) => {
     process.stdin.setEncoding("utf-8");
+    const timeout = setTimeout(() => {
+      process.stdin.pause();
+      resolve("");
+    }, 30000);
     process.stdin.once("data", (chunk) => {
+      clearTimeout(timeout);
+      process.stdin.pause();
       resolve(chunk.toString().trim());
     });
-    setTimeout(() => resolve(""), 30000);
   });
 }

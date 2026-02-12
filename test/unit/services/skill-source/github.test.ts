@@ -257,6 +257,82 @@ describe("GitHubSourceProvider", () => {
       }
     });
 
+    test("falls back to skills/ directory when marketplace.json has no plugins array", async () => {
+      // Simulates plugin-format repos like lackeyjb/playwright-skill where
+      // marketplace.json is package metadata (no plugins array) and
+      // skills live under skills/<name>/
+      const marketplaceJson = JSON.stringify({
+        name: "playwright-skill",
+        version: "4.1.0",
+        description: "A browser automation skill",
+      });
+
+      const provider = createGitHubProvider({
+        gitClone: fakeGitClone({
+          ".claude-plugin/marketplace.json": marketplaceJson,
+          ".claude-plugin/plugin.json": '{"name": "playwright-skill"}',
+          "skills/playwright-skill/SKILL.md": VALID_SKILL_MD,
+        }),
+        gitRevParse: fakeRevParse,
+      });
+
+      const result = await provider.fetch("lackeyjb/playwright-skill");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.subdirectory).toBe(
+          join("skills", "playwright-skill"),
+        );
+        expect(await Bun.file(join(result.value.skillDir, "SKILL.md")).exists()).toBe(true);
+        await rm(result.value.tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("falls back to skills/ directory when no marketplace.json exists", async () => {
+      const provider = createGitHubProvider({
+        gitClone: fakeGitClone({
+          "skills/my-skill/SKILL.md": VALID_SKILL_MD,
+          "README.md": "# A plugin repo",
+        }),
+        gitRevParse: fakeRevParse,
+      });
+
+      const result = await provider.fetch("user/plugin-repo");
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.subdirectory).toBe(join("skills", "my-skill"));
+        expect(await Bun.file(join(result.value.skillDir, "SKILL.md")).exists()).toBe(true);
+        await rm(result.value.tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("skills/ directory with multiple skills prompts selectSkill", async () => {
+      const provider = createGitHubProvider({
+        gitClone: fakeGitClone({
+          "skills/skill-a/SKILL.md": VALID_SKILL_MD,
+          "skills/skill-b/SKILL.md": VALID_SKILL_MD,
+        }),
+        gitRevParse: fakeRevParse,
+      });
+
+      let selectCalled = false;
+      const result = await provider.fetch("user/multi-skill-repo", {
+        selectSkill: async (skills) => {
+          selectCalled = true;
+          expect(skills).toHaveLength(2);
+          return "skill-a";
+        },
+      });
+
+      expect(selectCalled).toBe(true);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.subdirectory).toBe(join("skills", "skill-a"));
+        await rm(result.value.tempDir, { recursive: true, force: true });
+      }
+    });
+
     test("fails when neither SKILL.md nor marketplace.json found", async () => {
       const provider = createGitHubProvider({
         gitClone: fakeGitClone({ "README.md": "# Hello" }),

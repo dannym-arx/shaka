@@ -70,24 +70,16 @@ export function createGitHubProvider(options: GitHubProviderOptions = {}): Skill
       }
 
       const version = commitResult.value;
-      // Use explicit subdirectory from options (update flow) or from parsed URL
       const subdirectory = fetchOptions?.subdirectory ?? parsed.value.subdirectory;
 
-      // Try SKILL.md at root or subdirectory
-      const skillDir = subdirectory ? join(tempDir, subdirectory) : tempDir;
-      if (await Bun.file(join(skillDir, "SKILL.md")).exists()) {
-        return ok({ skillDir, tempDir, version, source: input, subdirectory });
-      }
-
-      // Fallback: marketplace
-      const marketplaceResult = await tryMarketplace(
+      const discovered = await discoverSkillDir(
         tempDir,
         subdirectory,
         version,
         input,
         fetchOptions,
       );
-      if (marketplaceResult) return marketplaceResult;
+      if (discovered) return discovered;
 
       await cleanupTempDir(tempDir);
       return err(new Error("No SKILL.md or .claude-plugin/marketplace.json found in repository."));
@@ -116,6 +108,35 @@ export function createGitHubProvider(options: GitHubProviderOptions = {}): Skill
       }
     },
   };
+}
+
+// --- Skill discovery chain ---
+
+/**
+ * Try to locate SKILL.md in the cloned repo using multiple strategies:
+ * 1. Root or explicit subdirectory
+ * 2. Marketplace manifest (.claude-plugin/marketplace.json with plugins array)
+ * 3. skills/ directory scan (plugin format repos)
+ */
+async function discoverSkillDir(
+  tempDir: string,
+  subdirectory: string | null,
+  version: string,
+  source: string,
+  options?: FetchOptions,
+): Promise<Result<FetchResult, Error> | null> {
+  // Try SKILL.md at root or subdirectory
+  const skillDir = subdirectory ? join(tempDir, subdirectory) : tempDir;
+  if (await Bun.file(join(skillDir, "SKILL.md")).exists()) {
+    return ok({ skillDir, tempDir, version, source, subdirectory });
+  }
+
+  // Fallback: marketplace
+  const marketplaceResult = await tryMarketplace(tempDir, subdirectory, version, source, options);
+  if (marketplaceResult) return marketplaceResult;
+
+  // Fallback: scan skills/ directory (plugin format without valid marketplace.json)
+  return trySkillsDirectory(tempDir, version, source, options);
 }
 
 // --- Marketplace fallback ---
@@ -255,6 +276,69 @@ function resolveMarketplacePlugin(
       if (!exists) return null;
       return ok({ skillDir, tempDir, version, source, subdirectory: pluginPath });
     });
+}
+
+// --- skills/ directory fallback ---
+
+/**
+ * Scan the `skills/` directory at repo root for skill subdirectories.
+ * Handles plugin-format repos where skills live under skills/<name>/.
+ */
+async function trySkillsDirectory(
+  tempDir: string,
+  version: string,
+  source: string,
+  options?: FetchOptions,
+): Promise<Result<FetchResult, Error> | null> {
+  const skillsDir = join(tempDir, "skills");
+
+  try {
+    const entries = await readdir(skillsDir, { withFileTypes: true });
+    const skillDirs: { name: string; path: string }[] = [];
+
+    for (const entry of entries) {
+      if (entry.isDirectory()) {
+        const candidatePath = join(skillsDir, entry.name);
+        if (await Bun.file(join(candidatePath, "SKILL.md")).exists()) {
+          skillDirs.push({ name: entry.name, path: candidatePath });
+        }
+      }
+    }
+
+    if (skillDirs.length === 0) return null;
+
+    // Single skill — auto-select
+    if (skillDirs.length === 1) {
+      const skill = skillDirs[0] as { name: string; path: string };
+      return ok({
+        skillDir: skill.path,
+        tempDir,
+        version,
+        source,
+        subdirectory: join("skills", skill.name),
+      });
+    }
+
+    // Multiple skills — prompt user to choose
+    if (!options?.selectSkill) return null;
+
+    const choices = skillDirs.map((s) => ({ name: s.name }));
+    const selected = await options.selectSkill(choices);
+    if (!selected) return null;
+
+    const chosen = skillDirs.find((s) => s.name === selected);
+    if (!chosen) return null;
+
+    return ok({
+      skillDir: chosen.path,
+      tempDir,
+      version,
+      source,
+      subdirectory: join("skills", chosen.name),
+    });
+  } catch {
+    return null;
+  }
 }
 
 // --- Default git implementations ---
