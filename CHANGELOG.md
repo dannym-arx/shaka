@@ -156,6 +156,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
   - Backup written before every consolidation
 - **Learnings search** — `shaka memory search` and MCP tool now return learnings alongside sessions
 - **Search result type discriminator** — `SearchResult.type` field (`"session"` | `"learning"`)
+- **Multi-provider skill installation** — Skills can now be installed from GitHub repositories or the Clawdhub registry (`clawhub.ai`), with automatic source detection based on input format
+  - `shaka skill install user/repo` — GitHub (input contains `/`)
+  - `shaka skill install sonoscli` or `sonoscli@1.2.0` — Clawdhub (bare word)
+  - `--github` and `--clawdhub` flags to override auto-detection
+- **Clawdhub provider** — HTTP-based skill installation from the Clawdhub registry with version resolution, ZIP download, and extraction
+- **GitHub marketplace fallback** — GitHub repos without a root `SKILL.md` are checked for `.claude-plugin/marketplace.json`; if found, available skills are listed for user selection
+- **SkillSourceProvider abstraction** — Provider interface and registry (`canHandle`, `fetch`, `resolveLatestVersion`) enabling pluggable skill sources
 - **Windows support** — Shaka now runs on Windows alongside macOS and Linux
   - Cross-platform path utilities (`src/platform/paths.ts`) with `readSymlinkTarget()` and `removeLink()` helpers
   - Junctions instead of directory symlinks for zero-privilege Windows support (no Developer Mode or admin required)
@@ -170,6 +177,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
 - **Summarization prompt extended** — Now extracts learnings alongside session summaries in a single inference call
 - **Session summaries exclude learnings** — `## Learnings` section stripped from session summary body (stored separately in `learnings.md`)
 - **`hashSessionId` extracted** — Shared utility in `src/memory/utils.ts` (was private in storage.ts)
+- **Skills manifest uses provider-agnostic fields** — `InstalledSkill` now uses `provider` and `version` instead of git-specific `ref` and `commit` fields
+- **Skill install/update services use provider abstraction** — Services delegate fetching to `SkillSourceProvider` instead of calling git directly; shared pipeline (validate → scan → install → persist) is source-agnostic
+- **`skill-git.ts` split into `skill-pipeline.ts` + `skill-source/github.ts`** — Generic deployment helpers separated from GitHub-specific git operations
+- **`shaka skill list` shows provider** — Installed skills now display their provider name (e.g., `github: user/repo` or `clawdhub: sonoscli`)
 - **All path construction uses `path.join()`** — Replaced hardcoded `/` separators across `src/` modules, `defaults/` hooks, providers, configurers, and tests
 - **`pathToFileURL()` for dynamic imports** — Bare Windows paths (`C:\...`) fail with `import()`, now converted to `file://` URLs
 - **Security pattern matching is cross-platform** — Path patterns normalize separators before matching
