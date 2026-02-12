@@ -188,6 +188,7 @@ import { createMemoryCommand } from "./commands/memory";
 import { createReloadCommand } from "./commands/reload";
 import { createRunCommand } from "./commands/run";
 import { createScanCommand } from "./commands/scan";
+import { createSkillCommand } from "./commands/skill";
 import { createUninstallCommand } from "./commands/uninstall";
 import { createUpdateCommand } from "./commands/update";
 import { getCurrentVersion } from "./domain/version";
@@ -206,6 +207,10 @@ if (import.meta.main) {
   program.addCommand(createConfigCommand());
   program.addCommand(createMcpCommand());
   program.addCommand(createMemoryCommand());
+  program.addCommand(createCommandsCommand());
+  program.addCommand(createRunCommand());
+  program.addCommand(createScanCommand());
+  program.addCommand(createSkillCommand());
   program.addCommand(createCommandsCommand());
   program.addCommand(createRunCommand());
   program.addCommand(createScanCommand());
