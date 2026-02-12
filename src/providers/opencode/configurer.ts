@@ -17,7 +17,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../../domain/config";
 import { type Result, err, ok } from "../../domain/result";
-import { installAssetSymlink, uninstallAssetSymlink, verifyAssetSymlink } from "../asset-installer";
+import {
+  installAssetSymlink,
+  installPerSkillSymlinks,
+  uninstallAssetSymlink,
+  uninstallPerSkillSymlinks,
+  verifyAssetSymlink,
+  verifyPerSkillSymlinks,
+} from "../asset-installer";
 import { compileForOpencode } from "../command-compiler";
 import { type DiscoveredCommand, discoverCommands } from "../command-discovery";
 import { type CommandManifest, readManifest } from "../command-manifest";
@@ -75,11 +82,15 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
         join(this.opencodeConfigDir, "agents"),
       );
 
-      // Install skills from defaults/system/skills/
+      // System skills: directory symlink (original behavior)
       await installAssetSymlink(
         join(config.shakaHome, "system", "skills"),
         join(this.opencodeConfigDir, "skills"),
       );
+
+      // Installed third-party skills: per-skill symlinks
+      const skillsTarget = join(this.opencodeConfigDir, "skills");
+      await installPerSkillSymlinks(join(config.shakaHome, "skills"), skillsTarget);
 
       await this.applyPermissions(config.permissionMode);
 
@@ -145,6 +156,9 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
         join(config.shakaHome, "system", "skills"),
         join(this.opencodeConfigDir, "skills"),
       );
+      // Remove installed third-party skill symlinks
+      const skillsTarget = join(this.opencodeConfigDir, "skills");
+      await uninstallPerSkillSymlinks(join(config.shakaHome, "skills"), skillsTarget);
 
       // Remove commands
       await this.uninstallCommands(config);
@@ -167,9 +181,14 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
       join(this.opencodeConfigDir, "skills"),
       "skills",
     );
+    const installedSkills = await verifyPerSkillSymlinks(
+      join(config.shakaHome, "skills"),
+      join(this.opencodeConfigDir, "skills"),
+      "installed skills",
+    );
     const commands = await this.checkCommands(config);
 
-    return { hooks, agents, skills, commands };
+    return { hooks, agents, skills, installedSkills, commands };
   }
 
   private async checkHooks(): Promise<{ ok: boolean; issue?: string }> {
