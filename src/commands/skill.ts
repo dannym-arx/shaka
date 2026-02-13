@@ -9,7 +9,11 @@ import { join } from "node:path";
 import { Command } from "commander";
 import { resolveShakaHome } from "../domain/config";
 import { loadManifest } from "../domain/skills-manifest";
-import { type ScanResult, installSkill } from "../services/skill-install-service";
+import {
+  InstallCancelledError,
+  type SecurityReport,
+  installSkill,
+} from "../services/skill-install-service";
 import { removeSkill } from "../services/skill-remove-service";
 import { getProviderByName } from "../services/skill-source";
 import { type UpdateResult, updateAllSkills, updateSkill } from "../services/skill-update-service";
@@ -30,8 +34,7 @@ export function createSkillCommand(): Command {
     .command("install")
     .description("Install a skill (auto-detects source)")
     .argument("<source>", "Skill source (user/repo, URL, or clawdhub slug)")
-    .option("--force", "Skip security scan prompt", false)
-    .option("--safe-only", "Abort if non-text files found", false)
+    .option("--yolo", "Skip security checks and install without confirmation", false)
     .option("--github", "Force GitHub provider")
     .option("--clawdhub", "Force Clawdhub provider")
     .action(handleInstall);
@@ -55,38 +58,54 @@ export function createSkillCommand(): Command {
 
 async function handleInstall(
   source: string,
-  opts: { force: boolean; safeOnly: boolean; github?: boolean; clawdhub?: boolean },
+  opts: { yolo: boolean; github?: boolean; clawdhub?: boolean },
 ): Promise<void> {
   const shakaHome = getShakaHome();
 
   // Resolve provider override from flags
   const providerOverride = resolveProviderFlag(opts);
   if (providerOverride && !providerOverride.ok) {
-    console.error(`✗ ${providerOverride.error.message}`);
+    console.error(`\u2717 ${providerOverride.error.message}`);
     process.exit(1);
   }
 
   console.log(`Installing skill from ${source}...`);
 
   const result = await installSkill(shakaHome, source, {
-    force: opts.force,
-    safeOnly: opts.safeOnly,
+    yolo: opts.yolo,
     provider: providerOverride?.ok ? providerOverride.value : undefined,
-    confirm: async (scan) => {
-      console.log(formatScanWarning(scan));
-      process.stdout.write("\nProceed with installation? [y/N] ");
+    onSecurityCheck: async (report, skillName) => {
+      console.log(formatSecurityReport(report));
+
+      if (!report.allPassed) {
+        const failed = report.checks.filter((c) => !c.passed);
+        for (const check of failed) {
+          console.log(`\n\u{1F6A8}  ${check.failureMessage}`);
+        }
+        console.log(
+          `Run \`shaka skill install ${source} --yolo\` to skip checks and install anyway`,
+        );
+        return false;
+      }
+
+      console.log(
+        "\n\u2139\uFE0F  You should still review the skill and/or get them from trusted sources.",
+      );
+      process.stdout.write(`Install skill "${skillName}"? [Y/n] `);
       const answer = await readLine();
-      return answer.toLowerCase() === "y";
+      return answer === "" || answer.toLowerCase() === "y";
     },
   });
 
   if (!result.ok) {
-    console.error(`\n✗ ${result.error.message}`);
+    if (!(result.error instanceof InstallCancelledError)) {
+      console.error(`\n\u2717 ${result.error.message}`);
+    }
     process.exit(1);
   }
 
   const ver = result.value.skill.version.slice(0, 7);
-  console.log(`\n✓ Installed skill "${result.value.name}" (${ver})`);
+  console.log(`\n\u2713 Installed skill "${result.value.name}" (${ver})`);
 }
 
 async function handleRemove(name: string): Promise<void> {
@@ -177,15 +196,12 @@ function printUpdateResult(r: UpdateResult): void {
   }
 }
 
-function formatScanWarning(scan: ScanResult): string {
-  const lines = ["\n⚠  This skill contains non-text files:\n"];
-  for (const file of scan.executable) {
-    lines.push(`  executable: ${file}`);
+function formatSecurityReport(report: SecurityReport): string {
+  const lines: string[] = [];
+  for (const check of report.checks) {
+    const status = check.passed ? "\u2705" : "\u274C";
+    lines.push(`${check.emoji} ${check.label} ${status}`);
   }
-  for (const file of scan.unknown) {
-    lines.push(`  unknown:    ${file}`);
-  }
-  lines.push("\nThese files could execute code on your machine.");
   return lines.join("\n");
 }
 

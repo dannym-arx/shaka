@@ -2,7 +2,7 @@
  * Skill install service.
  *
  * Delegates fetching to a SkillSourceProvider, then runs the common pipeline:
- * validate → security scan → collision check → deploy → persist.
+ * validate → security checks → collision check → deploy → persist.
  */
 
 import { readdir } from "node:fs/promises";
@@ -26,13 +26,32 @@ export interface ScanResult {
   unknown: string[];
 }
 
+export interface SecurityCheckEntry {
+  emoji: string;
+  label: string;
+  passed: boolean;
+  details: string[];
+  failureMessage: string;
+}
+
+export interface SecurityReport {
+  checks: SecurityCheckEntry[];
+  allPassed: boolean;
+}
+
+/** Sentinel error signalling the install was cancelled via callback. */
+export class InstallCancelledError extends Error {
+  override name = "InstallCancelledError";
+  constructor(message = "Installation cancelled.") {
+    super(message);
+  }
+}
+
 export interface InstallOptions {
-  /** Skip security scan prompt and install regardless. */
-  force?: boolean;
-  /** Abort if any non-text files are found (for scripted usage). */
-  safeOnly?: boolean;
-  /** Callback for confirming installation when executable files are found. */
-  confirm?: (scan: ScanResult) => Promise<boolean>;
+  /** Skip all security checks and confirmation prompt. */
+  yolo?: boolean;
+  /** Called with security check results and skill name. Return true to proceed. */
+  onSecurityCheck?: (report: SecurityReport, skillName: string) => Promise<boolean>;
   /** Callback to let user choose from multiple skills (marketplace repos). */
   selectSkill?: (skills: { name: string; description?: string }[]) => Promise<string | null>;
   /** Override auto-detected provider (e.g., from --github or --clawdhub flag). */
@@ -81,9 +100,15 @@ export async function installSkill(
     const validation = await validateSkillStructure(fetchResult.value.skillDir);
     if (!validation.ok) return validation;
 
-    // Security scan
-    const scanResult = await enforceSecurityScan(fetchResult.value.skillDir, options);
-    if (!scanResult.ok) return scanResult;
+    // Security checks (unless --yolo)
+    if (!options.yolo) {
+      const securityResult = await enforceSecurityChecks(
+        fetchResult.value.skillDir,
+        validation.value.name,
+        options,
+      );
+      if (!securityResult.ok) return securityResult;
+    }
 
     // Check for name collision
     const collisionResult = await checkNameCollision(shakaHome, validation.value.name);
@@ -127,27 +152,87 @@ export async function scanForExecutableContent(skillPath: string): Promise<ScanR
   return result;
 }
 
+// --- Security checks ---
+
+/**
+ * Run all security checks on a skill directory.
+ */
+export async function runSecurityChecks(skillPath: string): Promise<SecurityReport> {
+  const checks = await Promise.all([
+    checkExecutables(skillPath),
+    checkSuspiciousLinks(skillPath),
+    checkHtmlComments(skillPath),
+  ]);
+  return {
+    checks,
+    allPassed: checks.every((c) => c.passed),
+  };
+}
+
+async function checkExecutables(skillPath: string): Promise<SecurityCheckEntry> {
+  const scan = await scanForExecutableContent(skillPath);
+  const hasRisky = scan.executable.length > 0 || scan.unknown.length > 0;
+  return {
+    emoji: "\u{1F3C3}",
+    label: "No executables",
+    passed: !hasRisky,
+    details: [...scan.executable, ...scan.unknown],
+    failureMessage: "Skill contains executable files, make sure to review it properly.",
+  };
+}
+
+async function checkSuspiciousLinks(skillPath: string): Promise<SecurityCheckEntry> {
+  const files = await collectFiles(skillPath);
+  const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
+  const flagged: string[] = [];
+  const pattern = /\b(curl|wget)\b/;
+  for (const file of mdFiles) {
+    const content = await Bun.file(join(skillPath, file)).text();
+    if (pattern.test(content)) {
+      flagged.push(file);
+    }
+  }
+  return {
+    emoji: "\u{1F517}",
+    label: "No links",
+    passed: flagged.length === 0,
+    details: flagged,
+    failureMessage: "Skill contains curl/wget commands, make sure to review it properly.",
+  };
+}
+
+async function checkHtmlComments(skillPath: string): Promise<SecurityCheckEntry> {
+  const files = await collectFiles(skillPath);
+  const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
+  const flagged: string[] = [];
+  for (const file of mdFiles) {
+    const content = await Bun.file(join(skillPath, file)).text();
+    if (content.includes("<!--")) {
+      flagged.push(file);
+    }
+  }
+  return {
+    emoji: "\u{1F977}",
+    label: "No html comments",
+    passed: flagged.length === 0,
+    details: flagged,
+    failureMessage: "Skill has HTML comments in markdown, make sure to review it properly.",
+  };
+}
+
 // --- Internal helpers ---
 
-async function enforceSecurityScan(
+async function enforceSecurityChecks(
   skillPath: string,
+  skillName: string,
   options: InstallOptions,
 ): Promise<Result<void, Error>> {
-  const scan = await scanForExecutableContent(skillPath);
-  const hasRiskyFiles = scan.executable.length > 0 || scan.unknown.length > 0;
-
-  if (!hasRiskyFiles) return ok(undefined);
-
-  if (options.safeOnly) {
-    const flagged = [...scan.executable, ...scan.unknown].join(", ");
-    return err(new Error(`Skill contains non-text files (${flagged}). Aborting (--safe-only).`));
-  }
-
-  if (options.force) return ok(undefined);
-
-  const confirmed = options.confirm ? await options.confirm(scan) : false;
-  if (!confirmed) {
-    return err(new Error("Installation cancelled by user."));
+  const report = await runSecurityChecks(skillPath);
+  if (options.onSecurityCheck) {
+    const proceed = await options.onSecurityCheck(report, skillName);
+    if (!proceed) return err(new InstallCancelledError());
+  } else if (!report.allPassed) {
+    return err(new Error("Security checks failed."));
   }
   return ok(undefined);
 }
