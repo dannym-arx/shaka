@@ -185,11 +185,16 @@ function resolveProviderFlag(opts: { github?: boolean; clawdhub?: boolean }) {
 
 function printUpdateResult(r: UpdateResult): void {
   if (r.upToDate) {
-    console.log(`  ✓ "${r.name}" is up to date (${r.newVersion.slice(0, 7)})`);
+    console.log(`  \u2713 "${r.name}" is up to date (${r.newVersion.slice(0, 7)})`);
   } else {
     const from = r.previousVersion.slice(0, 7);
     const to = r.newVersion.slice(0, 7);
-    console.log(`  ✓ Updated "${r.name}" (${from} → ${to})`);
+    console.log(`  \u2713 Updated "${r.name}" (${from} \u2192 ${to})`);
+    if (r.warnings?.length) {
+      for (const w of r.warnings) {
+        console.log(`    \u26A0  ${w}`);
+      }
+    }
   }
 }
 

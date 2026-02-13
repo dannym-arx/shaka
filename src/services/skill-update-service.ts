@@ -7,7 +7,13 @@
 
 import { type Result, err, ok } from "../domain/result";
 import { loadManifest } from "../domain/skills-manifest";
-import { cleanupTempDir, installSkillFiles, persistToManifest } from "./skill-pipeline";
+import { runSecurityChecks } from "./skill-install-service";
+import {
+  cleanupTempDir,
+  installSkillFiles,
+  persistToManifest,
+  validateSkillStructure,
+} from "./skill-pipeline";
 import { getProviderByName } from "./skill-source";
 import type { SkillSourceProvider } from "./skill-source/types";
 
@@ -21,6 +27,8 @@ export interface UpdateResult {
   previousVersion: string;
   newVersion: string;
   upToDate: boolean;
+  /** Security warnings for the updated version (non-blocking). */
+  warnings?: string[];
 }
 
 export async function updateSkill(
@@ -61,6 +69,19 @@ export async function updateSkill(
       });
     }
 
+    // Validate structure
+    const validation = await validateSkillStructure(fetchResult.value.skillDir);
+    if (!validation.ok) return validation;
+
+    // Security checks (warn but don't block — user already trusts this source)
+    const report = await runSecurityChecks(fetchResult.value.skillDir);
+    const warnings: string[] = [];
+    if (!report.allPassed) {
+      for (const check of report.checks.filter((c) => !c.passed)) {
+        warnings.push(check.failureMessage);
+      }
+    }
+
     // Deploy and persist
     await installSkillFiles(fetchResult.value.skillDir, shakaHome, name);
 
@@ -76,6 +97,7 @@ export async function updateSkill(
       previousVersion: skill.version,
       newVersion: fetchResult.value.version,
       upToDate: false,
+      warnings: warnings.length > 0 ? warnings : undefined,
     });
   } finally {
     await cleanupTempDir(fetchResult.value.tempDir);

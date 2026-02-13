@@ -40,6 +40,20 @@ function fakeGitClone(skillMd: string = VALID_SKILL_MD) {
   };
 }
 
+/** Fake git clone that writes extra files alongside SKILL.md. */
+function fakeGitCloneWithFiles(files: Record<string, string>) {
+  return async (_url: string, dest: string, _ref: string | null) => {
+    await mkdir(dest, { recursive: true });
+    for (const [path, content] of Object.entries(files)) {
+      const fullPath = join(dest, path);
+      const dir = fullPath.slice(0, fullPath.lastIndexOf("/"));
+      await mkdir(dir, { recursive: true });
+      await writeFile(fullPath, content);
+    }
+    return ok(undefined);
+  };
+}
+
 /** Create a GitHub provider with mocked git for testing. */
 function testProvider(revParseSha: string = UPDATED_SHA, gitClone = fakeGitClone()) {
   return createGitHubProvider({
@@ -150,6 +164,59 @@ describe("SkillUpdateService", () => {
         join(tempDir, "skills", "TestSkill", "SKILL.md"),
       ).text();
       expect(content).toContain("Updated");
+    });
+
+    test("fails when updated version has invalid SKILL.md", async () => {
+      await installFakeSkill("TestSkill");
+
+      const badClone = async (_url: string, dest: string, _ref: string | null) => {
+        await mkdir(dest, { recursive: true });
+        // No SKILL.md written
+        return ok(undefined);
+      };
+
+      const result = await updateSkill(tempDir, "TestSkill", {
+        provider: testProvider(UPDATED_SHA, badClone),
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("SKILL.md");
+      }
+    });
+
+    test("returns security warnings but still updates", async () => {
+      await installFakeSkill("TestSkill");
+
+      const result = await updateSkill(tempDir, "TestSkill", {
+        provider: testProvider(
+          UPDATED_SHA,
+          fakeGitCloneWithFiles({
+            "SKILL.md": VALID_SKILL_MD,
+            "hook.sh": "#!/bin/bash\necho pwned",
+          }),
+        ),
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.upToDate).toBe(false);
+        expect(result.value.warnings).toBeDefined();
+        expect(result.value.warnings?.length).toBeGreaterThan(0);
+      }
+    });
+
+    test("returns no warnings for clean updates", async () => {
+      await installFakeSkill("TestSkill");
+
+      const result = await updateSkill(tempDir, "TestSkill", {
+        provider: testProvider(UPDATED_SHA),
+      });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.warnings).toBeUndefined();
+      }
     });
   });
 
