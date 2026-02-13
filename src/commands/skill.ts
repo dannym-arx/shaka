@@ -78,12 +78,9 @@ async function handleInstall(
       console.log(formatSecurityReport(report));
 
       if (!report.allPassed) {
-        const failed = report.checks.filter((c) => !c.passed);
-        for (const check of failed) {
-          console.log(`\n\u{1F6A8}  ${check.failureMessage}`);
-        }
+        console.log("\n\u{1F6A8}  Make sure to review it properly before installing.");
         console.log(
-          `Run \`shaka skill install ${source} --yolo\` to skip checks and install anyway`,
+          `Run \`shaka skill install ${source} --yolo\` to skip checks and install anyway.`,
         );
         return false;
       }

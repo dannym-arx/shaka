@@ -160,8 +160,9 @@ export async function scanForExecutableContent(skillPath: string): Promise<ScanR
 export async function runSecurityChecks(skillPath: string): Promise<SecurityReport> {
   const checks = await Promise.all([
     checkExecutables(skillPath),
-    checkSuspiciousLinks(skillPath),
+    checkUrls(skillPath),
     checkHtmlComments(skillPath),
+    checkInvisibleChars(skillPath),
   ]);
   return {
     checks,
@@ -181,11 +182,11 @@ async function checkExecutables(skillPath: string): Promise<SecurityCheckEntry> 
   };
 }
 
-async function checkSuspiciousLinks(skillPath: string): Promise<SecurityCheckEntry> {
+async function checkUrls(skillPath: string): Promise<SecurityCheckEntry> {
   const files = await collectFiles(skillPath);
   const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
   const flagged: string[] = [];
-  const pattern = /\b(curl|wget)\b/;
+  const pattern = /https?:\/\//;
   for (const file of mdFiles) {
     const content = await Bun.file(join(skillPath, file)).text();
     if (pattern.test(content)) {
@@ -194,10 +195,10 @@ async function checkSuspiciousLinks(skillPath: string): Promise<SecurityCheckEnt
   }
   return {
     emoji: "\u{1F517}",
-    label: "No links",
+    label: "No URLs",
     passed: flagged.length === 0,
     details: flagged,
-    failureMessage: "Skill contains curl/wget commands, make sure to review it properly.",
+    failureMessage: "Skill contains URLs in markdown, make sure to review it properly.",
   };
 }
 
@@ -217,6 +218,29 @@ async function checkHtmlComments(skillPath: string): Promise<SecurityCheckEntry>
     passed: flagged.length === 0,
     details: flagged,
     failureMessage: "Skill has HTML comments in markdown, make sure to review it properly.",
+  };
+}
+
+/** Zero-width and bidirectional override characters that can hide content. */
+const INVISIBLE_CHARS =
+  /[\u200B\u200E\u200F\u2028\u2029\u2060\u2066\u2067\u2068\u2069\u206A-\u206F\uFEFF\u00AD]|\u200C|\u200D/;
+
+async function checkInvisibleChars(skillPath: string): Promise<SecurityCheckEntry> {
+  const files = await collectFiles(skillPath);
+  const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
+  const flagged: string[] = [];
+  for (const file of mdFiles) {
+    const content = await Bun.file(join(skillPath, file)).text();
+    if (INVISIBLE_CHARS.test(content)) {
+      flagged.push(file);
+    }
+  }
+  return {
+    emoji: "\u{1F47B}",
+    label: "No invisible chars",
+    passed: flagged.length === 0,
+    details: flagged,
+    failureMessage: "Skill contains invisible unicode characters, make sure to review it properly.",
   };
 }
 
