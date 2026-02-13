@@ -216,7 +216,7 @@ async function readLine(): Promise<string> {
     process.stdin.setEncoding("utf-8");
     const timeout = setTimeout(() => {
       process.stdin.pause();
-      resolve("");
+      resolve("n");
     }, 30000);
     process.stdin.once("data", (chunk) => {
       clearTimeout(timeout);

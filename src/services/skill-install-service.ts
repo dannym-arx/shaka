@@ -6,7 +6,7 @@
  */
 
 import { readdir } from "node:fs/promises";
-import { join } from "node:path";
+import { extname, join } from "node:path";
 import { type Result, err, ok } from "../domain/result";
 import type { InstalledSkill } from "../domain/skills-manifest";
 import { loadManifest } from "../domain/skills-manifest";
@@ -138,7 +138,7 @@ export async function scanForExecutableContent(skillPath: string): Promise<ScanR
 
   const entries = await collectFiles(skillPath);
   for (const relativePath of entries) {
-    const ext = extname(relativePath);
+    const ext = extname(relativePath).toLowerCase();
 
     if (SAFE_EXTENSIONS.has(ext) || ext === "") {
       result.safe.push(relativePath);
@@ -221,9 +221,13 @@ async function checkHtmlComments(skillPath: string): Promise<SecurityCheckEntry>
   };
 }
 
-/** Zero-width and bidirectional override characters that can hide content. */
+/**
+ * Zero-width and bidirectional override characters that can hide content.
+ * Note: U+200C (ZWNJ) and U+200D (ZWJ) are excluded because they have
+ * legitimate uses in non-Latin scripts (Arabic, Hindi, etc.).
+ */
 const INVISIBLE_CHARS =
-  /[\u200B\u200E\u200F\u2028\u2029\u2060\u2066\u2067\u2068\u2069\u206A-\u206F\uFEFF\u00AD]|\u200C|\u200D/;
+  /[\u200B\u200E\u200F\u2028\u2029\u2060\u2066\u2067\u2068\u2069\u206A-\u206F\uFEFF\u00AD]/;
 
 async function checkInvisibleChars(skillPath: string): Promise<SecurityCheckEntry> {
   const files = await collectFiles(skillPath);
@@ -288,10 +292,4 @@ async function collectFiles(dir: string, prefix = ""): Promise<string[]> {
     }
   }
   return files;
-}
-
-function extname(path: string): string {
-  const dot = path.lastIndexOf(".");
-  if (dot <= 0 || dot === path.length - 1) return "";
-  return path.slice(dot).toLowerCase();
 }

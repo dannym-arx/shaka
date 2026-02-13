@@ -253,7 +253,7 @@ async function findSingleSkillDir(
   }
 }
 
-function resolveMarketplacePlugin(
+async function resolveMarketplacePlugin(
   tempDir: string,
   manifest: MarketplaceManifest,
   subdirectory: string,
@@ -265,17 +265,14 @@ function resolveMarketplacePlugin(
     return normalized === subdirectory || p.name === subdirectory;
   });
 
-  if (!plugin) return Promise.resolve(null);
+  if (!plugin) return null;
 
   const pluginPath = plugin.source.replace(/^\.\//, "");
   const skillDir = join(tempDir, pluginPath);
 
-  return Bun.file(join(skillDir, "SKILL.md"))
-    .exists()
-    .then((exists) => {
-      if (!exists) return null;
-      return ok({ skillDir, tempDir, version, source, subdirectory: pluginPath });
-    });
+  const exists = await Bun.file(join(skillDir, "SKILL.md")).exists();
+  if (!exists) return null;
+  return ok({ skillDir, tempDir, version, source, subdirectory: pluginPath });
 }
 
 // --- skills/ directory fallback ---
