@@ -11,9 +11,12 @@ import {
   getPrincipalName,
   isSubagent,
   listSummaries,
+  loadLearnings,
   loadShakaFile,
   loadSummary,
+  renderEntry,
   resolveShakaHome,
+  selectLearnings,
   selectRecentSummaries,
 } from "shaka";
 
@@ -23,6 +26,9 @@ export const HOOK_VERSION = "0.5.0";
 
 /** Max total characters for the memory section (~5KB) */
 const MAX_MEMORY_CHARS = 5000;
+
+/** Max characters for learnings context (~6KB) */
+const MAX_LEARNINGS_CHARS = 6000;
 
 /**
  * Resolve the defaults/user/ directory from the system/ symlink.
@@ -101,6 +107,28 @@ async function loadUserFiles(shakaHome: string): Promise<string[]> {
 }
 
 /**
+ * Load learned knowledge for context.
+ * Returns a formatted markdown section, or empty string if none available.
+ */
+async function loadLearnedKnowledge(shakaHome: string): Promise<string> {
+  const memoryDir = join(shakaHome, "memory");
+  const cwd = process.cwd();
+
+  try {
+    const entries = await loadLearnings(memoryDir);
+    if (entries.length === 0) return "";
+
+    const selected = selectLearnings(entries, cwd, MAX_LEARNINGS_CHARS);
+    if (selected.length === 0) return "";
+
+    const rendered = selected.map(renderEntry).join("\n\n---\n\n");
+    return `## Learnings\n\n${rendered}`;
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Load recent session summaries for context.
  * Returns a formatted markdown section, or empty string if none available.
  */
@@ -141,7 +169,21 @@ async function loadRecentSessions(shakaHome: string): Promise<string> {
   }
 }
 
+function elapsedMs(start: number): number {
+  return Math.round(performance.now() - start);
+}
+
 async function main() {
+  const t0 = performance.now();
+  const timings: string[] = [];
+
+  function mark(label: string, startMs: number, detail = "") {
+    const ms = elapsedMs(startMs);
+    const line = `  [${ms}ms] ${label}${detail ? ` (${detail})` : ""}`;
+    console.error(line);
+    timings.push(line);
+  }
+
   // Skip context loading for subagent sessions
   if (isSubagent()) {
     console.error("🤖 Subagent session - skipping context loading");
@@ -152,22 +194,37 @@ async function main() {
   const contextParts: string[] = [];
 
   // Load system reasoning framework (with customization override support)
+  let t = performance.now();
   const reasoning = await loadShakaFile("system/base-reasoning-framework.md", shakaHome);
   if (reasoning) {
     contextParts.push(reasoning);
-    console.error("✅ Loaded system/base-reasoning-framework.md");
+    mark("Loaded reasoning framework", t, `${reasoning.length} chars`);
   }
 
   // Load user files (skips unmodified plain-markdown templates)
-  console.error("📂 Loading user files...");
+  t = performance.now();
   const userFiles = await loadUserFiles(shakaHome);
   contextParts.push(...userFiles);
+  mark("Loaded user files", t, `${userFiles.length} files`);
+
+  // Load learnings (between user files and sessions — stable knowledge first)
+  t = performance.now();
+  const learningsSection = await loadLearnedKnowledge(shakaHome);
+  if (learningsSection) {
+    contextParts.push(learningsSection);
+    mark("Loaded learnings", t, `${learningsSection.length} chars`);
+  } else {
+    mark("No learnings to load", t);
+  }
 
   // Load recent session summaries
+  t = performance.now();
   const memorySections = await loadRecentSessions(shakaHome);
   if (memorySections) {
     contextParts.push(memorySections);
-    console.error("📝 Loaded recent session summaries");
+    mark("Loaded session summaries", t, `${memorySections.length} chars`);
+  } else {
+    mark("No session summaries to load", t);
   }
 
   if (contextParts.length === 0) {
@@ -190,6 +247,8 @@ async function main() {
   // Join all context with separators
   const contextContent = contextParts.join("\n\n---\n\n");
 
+  const totalChars = contextContent.length;
+
   const systemReminder = `<system-reminder>
 SHAKA CONTEXT (Auto-loaded at Session Start)
 
@@ -210,7 +269,11 @@ This context is now active.
 </system-reminder>`;
 
   console.log(systemReminder);
-  console.error("✅ Shaka context loaded");
+  mark("Session-start hook total", t0, `${totalChars} chars context`);
+
+  // Write timing to file for diagnostics (non-blocking, fail-silent)
+  const timingPath = join(shakaHome, "memory", ".timing-session-start.log");
+  Bun.write(timingPath, `${new Date().toISOString()}\n${timings.join("\n")}\n`).catch(() => {});
 }
 
 if (import.meta.main) {

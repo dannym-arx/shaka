@@ -1,9 +1,13 @@
 #!/usr/bin/env bun
 /**
- * SessionEnd hook — transcript summarization
+ * SessionEnd hook — transcript summarization (fire-and-forget)
  *
- * Fires when a coding session ends. Reads the transcript, calls inference
- * to summarize it, and writes a summary file to memory/sessions/.
+ * Architecture:
+ *   Dispatch (default): reads stdin → writes temp file → spawns detached worker → exits 0
+ *   Worker (--worker <tmpfile>): reads temp file → inference → writes summary + learnings
+ *
+ * The dispatch process exits in milliseconds so the CLI is never blocked.
+ * The worker runs detached and writes results to disk asynchronously.
  *
  * Provider detection:
  * - Claude Code sends { transcript_path, session_id, reason, cwd }
@@ -12,28 +16,38 @@
  * Fail-open: any error logs to stderr and exits 0.
  */
 
+import { mkdir, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type NormalizedMessage,
   type SessionMetadata,
   buildSummarizationPrompt,
   getSummarizationModel,
+  hashSessionId,
   inference,
   isSubagent,
+  loadLearnings,
+  mergeNewLearnings,
   parseClaudeCodeTranscript,
+  parseExtractedLearnings,
   parseOpencodeTranscript,
   parseSummaryOutput,
   resolveShakaHome,
   truncateTranscript,
+  undoSessionLearnings,
+  writeLearnings,
   writeSummary,
 } from "shaka";
 
 /** Hook trigger events — Shaka canonical names */
 export const TRIGGER = ["session.end"] as const;
-export const HOOK_VERSION = "0.1.0";
+export const HOOK_VERSION = "0.2.0";
 
 /** Max transcript chars to send to inference (avoid token limits) */
 const MAX_TRANSCRIPT_CHARS = 100_000;
+
+/** CLI flag that switches to worker mode */
+const WORKER_FLAG = "--worker";
 
 interface SessionEndInput {
   session_id?: string;
@@ -101,7 +115,6 @@ async function saveFailedOutput(
   rawOutput: string,
 ): Promise<void> {
   const failedDir = join(memoryDir, "sessions", "failed");
-  const { mkdir } = await import("node:fs/promises");
   await mkdir(failedDir, { recursive: true });
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -111,11 +124,18 @@ async function saveFailedOutput(
   console.error(`Saved raw output to ${filePath}`);
 }
 
-async function main() {
-  // Skip for subagent sessions
-  if (isSubagent()) {
-    process.exit(0);
-  }
+function elapsedMs(start: number): number {
+  return Math.round(performance.now() - start);
+}
+
+// ─── Dispatch (parent) ──────────────────────────────────────────────────────
+
+/**
+ * Dispatch mode: read stdin, write temp file, spawn background worker, exit 0.
+ * This returns control to the CLI in milliseconds.
+ */
+async function dispatch() {
+  if (isSubagent()) process.exit(0);
 
   const rawInput = await readStdin();
   if (!rawInput) {
@@ -132,18 +152,73 @@ async function main() {
   }
 
   const sessionId = input.session_id ?? "unknown";
+  const shakaHome = resolveShakaHome();
+  const memoryDir = join(shakaHome, "memory");
+  await mkdir(memoryDir, { recursive: true });
+
+  // Write stdin payload to temp file so the worker can read it
+  const tmpPath = join(
+    memoryDir,
+    `.session-end-input-${sessionId.slice(0, 8)}-${process.pid}.json`,
+  );
+  await Bun.write(tmpPath, rawInput);
+
+  // Spawn detached worker — stderr goes to log file for diagnostics
+  const logPath = join(memoryDir, ".session-end-worker.log");
+  const proc = Bun.spawn(["bun", import.meta.path, WORKER_FLAG, tmpPath], {
+    stdin: "ignore",
+    stdout: "ignore",
+    stderr: Bun.file(logPath),
+  });
+  proc.unref();
+
+  console.error(`[session-end] Dispatched worker for session ${sessionId}`);
+}
+
+// ─── Worker ─────────────────────────────────────────────────────────────────
+
+/**
+ * Worker mode: read temp file, process transcript, write summary + learnings.
+ * Runs as a detached background process — CLI is not waiting for this.
+ */
+async function worker(tmpPath: string) {
+  const t0 = performance.now();
+  const timings: string[] = [];
+
+  function mark(label: string, startMs: number, detail = "") {
+    const ms = elapsedMs(startMs);
+    const line = `  [${ms}ms] ${label}${detail ? ` (${detail})` : ""}`;
+    console.error(line);
+    timings.push(line);
+  }
+
+  // Read input from temp file, then delete it
+  const rawInput = await Bun.file(tmpPath).text();
+  await unlink(tmpPath).catch(() => {});
+
+  let input: SessionEndInput;
+  try {
+    input = JSON.parse(rawInput);
+  } catch {
+    console.error("Failed to parse temp file JSON");
+    return;
+  }
+
+  const sessionId = input.session_id ?? "unknown";
   const cwd = input.cwd ?? process.cwd();
   const isClaudeCode = "transcript_path" in input && typeof input.transcript_path === "string";
   const provider = isClaudeCode ? "claude" : "opencode";
 
-  console.error(`Session end: ${provider} session ${sessionId}`);
+  console.error(`Worker started: ${provider} session ${sessionId}`);
 
   // Load and parse transcript
+  let t = performance.now();
   const messages = await loadTranscript(input);
   if (messages.length === 0) {
     console.error("Empty transcript, skipping summarization");
-    process.exit(0);
+    return;
   }
+  mark("Loaded transcript", t, `${messages.length} messages`);
 
   // Truncate if needed
   const truncated = truncateTranscript(messages, MAX_TRANSCRIPT_CHARS);
@@ -156,45 +231,125 @@ async function main() {
     sessionId,
   };
 
-  // Build prompt and call inference
-  const prompt = buildSummarizationPrompt(truncated, metadata);
+  const shakaHome = resolveShakaHome();
+  const memoryDir = join(shakaHome, "memory");
 
+  // Load existing learnings for title matching in extraction prompt
+  t = performance.now();
+  const existingLearnings = await loadLearnings(memoryDir);
+  const existingTitles = existingLearnings.map((e) => e.title);
+  mark("Loaded existing learnings", t, `${existingTitles.length} titles`);
+
+  // Build prompt (single call produces both summary + learnings)
+  const prompt = buildSummarizationPrompt(truncated, metadata, existingTitles);
+
+  // Call inference
   const model = await getSummarizationModel(provider);
-  console.error(`Calling inference for summarization${model ? ` (model: ${model})` : ""}...`);
+  console.error(`  Calling inference${model ? ` (model: ${model})` : ""}...`);
+  t = performance.now();
   const result = await inference({
     userPrompt: prompt,
     model,
     timeout: 60000,
   });
+  mark("Inference complete", t, result.success ? "ok" : "failed");
 
   if (!result.success || !result.text) {
     console.error(`Inference failed: ${result.error ?? "no response"}`);
-    process.exit(0);
+    return;
   }
 
-  // Parse the summary output
-  const parsed = parseSummaryOutput(result.text);
+  // Strip outer code fences if the LLM wrapped its entire response in ```markdown...```
+  const rawOutput = result.text
+    .trim()
+    .replace(/^```\w*\n/, "")
+    .replace(/\n```$/, "");
+
+  // Parse the summary output (## Learnings section is stripped from body)
+  const parsed = parseSummaryOutput(rawOutput);
   if (!parsed) {
     console.error("Failed to parse inference output as summary");
-    const shakaHome = resolveShakaHome();
-    const memoryDir = join(shakaHome, "memory");
-    await saveFailedOutput(memoryDir, sessionId, result.text);
-    process.exit(0);
+    await saveFailedOutput(memoryDir, sessionId, rawOutput);
+    return;
   }
 
   // Use original metadata (not LLM's echo) to ensure deterministic filenames
   const summary = { ...parsed, metadata };
 
   // Write summary to disk
-  const shakaHome = resolveShakaHome();
-  const memoryDir = join(shakaHome, "memory");
-  const filePath = await writeSummary(memoryDir, summary);
-  console.error(`Summary written to ${filePath}`);
+  t = performance.now();
+  await writeSummary(memoryDir, summary);
+  mark("Summary written", t);
+
+  // Extract and write learnings (fail-open: summary already written)
+  t = performance.now();
+  await extractAndWriteLearnings(rawOutput, metadata, memoryDir);
+  mark("Learnings extraction", t);
+
+  mark("Session-end worker total", t0, provider);
+
+  // Write timing to file for diagnostics (non-blocking, fail-silent)
+  const timingPath = join(memoryDir, ".timing-session-end.log");
+  Bun.write(timingPath, `${new Date().toISOString()}\n${timings.join("\n")}\n`).catch(() => {});
+}
+
+/**
+ * Extract learnings from inference output and write to learnings.md.
+ * Fail-open: any error is logged but does not affect the summary.
+ */
+async function extractAndWriteLearnings(
+  rawOutput: string,
+  metadata: SessionMetadata,
+  memoryDir: string,
+): Promise<void> {
+  try {
+    const sessionHash = hashSessionId(metadata.sessionId);
+    const extracted = parseExtractedLearnings(rawOutput, {
+      date: metadata.date,
+      cwd: metadata.cwd,
+      sessionHash,
+    });
+
+    if (extracted.length === 0) {
+      console.error("No learnings extracted from this session");
+      return;
+    }
+
+    // Load, undo previous extractions from this session, merge new
+    let entries = await loadLearnings(memoryDir);
+    entries = undoSessionLearnings(entries, sessionHash);
+    entries = mergeNewLearnings(entries, extracted);
+
+    await writeLearnings(memoryDir, entries);
+    console.error(`Wrote ${extracted.length} learning(s) to learnings.md`);
+  } catch (err) {
+    console.error(
+      `Learnings extraction failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 }
 
 if (import.meta.main) {
-  main().catch((err) => {
-    console.error(`Session-end hook error: ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(0);
-  });
+  const workerIdx = process.argv.indexOf(WORKER_FLAG);
+
+  if (workerIdx !== -1) {
+    // Worker mode: process the session in background
+    const tmpPath = process.argv[workerIdx + 1];
+    if (!tmpPath) {
+      console.error("Worker mode requires a temp file path");
+      process.exit(0);
+    }
+    worker(tmpPath).catch((err) => {
+      console.error(
+        `Session-end worker error: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      process.exit(0);
+    });
+  } else {
+    // Dispatch mode: read stdin, spawn worker, exit immediately
+    dispatch().catch((err) => {
+      console.error(`Session-end hook error: ${err instanceof Error ? err.message : String(err)}`);
+      process.exit(0);
+    });
+  }
 }

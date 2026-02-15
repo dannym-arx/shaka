@@ -86,6 +86,24 @@ export {
 export { type SearchResult, searchMemory } from "./memory/search";
 
 export {
+  type LearningEntry,
+  type LearningCategory,
+  type Exposure,
+  parseLearnings,
+  renderEntry,
+  renderLearnings,
+  loadLearnings,
+  writeLearnings,
+  scoreEntry,
+  selectLearnings,
+  undoSessionLearnings,
+  mergeNewLearnings,
+  buildExtractionPromptSection,
+  parseExtractedLearnings,
+  hashSessionId,
+} from "./memory/learnings";
+
+export {
   type SemVer,
   type GitRef,
   parseSemver,

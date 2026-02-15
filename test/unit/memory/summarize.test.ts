@@ -91,6 +91,27 @@ describe("Summarize", () => {
       const prompt = buildSummarizationPrompt(sampleMessages, metadata);
       expect(prompt).toContain("opencode");
     });
+
+    test("includes learnings extraction section", () => {
+      const prompt = buildSummarizationPrompt(sampleMessages, sampleMetadata);
+      expect(prompt).toContain("## Learnings");
+      expect(prompt).toContain("Do NOT extract");
+      expect(prompt).toContain("DO extract");
+    });
+
+    test("includes existing learning titles when provided", () => {
+      const prompt = buildSummarizationPrompt(sampleMessages, sampleMetadata, [
+        "Use Bun.file()",
+        "No emojis",
+      ]);
+      expect(prompt).toContain("- Use Bun.file()");
+      expect(prompt).toContain("- No emojis");
+    });
+
+    test("shows placeholder when no existing learnings", () => {
+      const prompt = buildSummarizationPrompt(sampleMessages, sampleMetadata, []);
+      expect(prompt).toContain("No existing learnings yet.");
+    });
   });
 
   describe("parseSummaryOutput", () => {
@@ -287,6 +308,171 @@ Works without language tag.
       const result = parseSummaryOutput(fenced);
       expect(result).not.toBeNull();
       expect(result?.title).toBe("Plain fenced output");
+    });
+
+    test("strips ## Learnings section from body", () => {
+      const withLearnings = `---
+date: "2026-02-09"
+cwd: /projects/myapp
+tags: [test]
+provider: claude
+session_id: ses-abc123
+---
+
+# Session with learnings
+
+## Summary
+Did some work.
+
+## Decisions
+- Chose option A.
+
+## Learnings
+
+### (correction) Use Bun.file()
+
+This project uses Bun runtime.
+
+### (preference) No emojis
+
+User prefers no emojis.
+`;
+      const result = parseSummaryOutput(withLearnings);
+      expect(result).not.toBeNull();
+      expect(result?.body).toContain("## Summary");
+      expect(result?.body).toContain("## Decisions");
+      expect(result?.body).not.toContain("## Learnings");
+      expect(result?.body).not.toContain("Use Bun.file()");
+      expect(result?.body).not.toContain("No emojis");
+    });
+
+    test("handles LLM using ```yaml code fence instead of --- frontmatter", () => {
+      const codeFenceFrontmatter = `\`\`\`yaml
+date: 2026-02-09
+cwd: /projects/myapp
+tags: [drafts, schema]
+provider: opencode
+session_id: ses-abc123
+\`\`\`
+
+# Drafts Feature Implementation Plan
+
+## Summary
+Created a drafts specification.
+
+## Decisions
+- Used autoincrement id column
+`;
+      const result = parseSummaryOutput(codeFenceFrontmatter);
+      expect(result).not.toBeNull();
+      expect(result?.metadata.date).toBe("2026-02-09");
+      expect(result?.metadata.cwd).toBe("/projects/myapp");
+      expect(result?.metadata.provider).toBe("opencode");
+      expect(result?.tags).toEqual(["drafts", "schema"]);
+      expect(result?.title).toBe("Drafts Feature Implementation Plan");
+      expect(result?.body).toContain("## Summary");
+    });
+
+    test("handles double-wrapped output (outer markdown + inner yaml fence)", () => {
+      const doubleWrapped = `\`\`\`markdown
+\`\`\`yaml
+date: 2026-02-09
+cwd: /projects/myapp
+tags: [auth]
+provider: claude
+session_id: ses-abc123
+\`\`\`
+
+# Fix auth flow
+
+## Summary
+Fixed the auth flow.
+\`\`\``;
+      const result = parseSummaryOutput(doubleWrapped);
+      expect(result).not.toBeNull();
+      expect(result?.title).toBe("Fix auth flow");
+      expect(result?.metadata.provider).toBe("claude");
+    });
+
+    test("handles ```yaml with single --- delimiter (no opening ---)", () => {
+      const singleDash = `\`\`\`yaml
+date: 2026-02-12
+cwd: /projects/myapp
+tags: [review, architecture]
+provider: opencode
+session_id: ses-xyz789
+---
+
+# Pattern Alignment Review
+
+## Summary
+Conducted pattern analysis.
+
+## Decisions
+- Used autoincrement id
+`;
+      const result = parseSummaryOutput(singleDash);
+      expect(result).not.toBeNull();
+      expect(result?.metadata.date).toBe("2026-02-12");
+      expect(result?.title).toBe("Pattern Alignment Review");
+      expect(result?.body).toContain("## Summary");
+    });
+
+    test("handles SHAKA-wrapped output with embedded frontmatter", () => {
+      const shakaWrapped = `🤖 SHAKA ═══════════════════════════════════
+   Task: Extract session info
+
+━━━ 👁️ OBSERVE ━━━ 1/7
+Some observation text.
+
+━━━ 🔨 BUILD ━━━ 4/7
+
+---
+date: 2026-02-10
+cwd: /projects/myapp
+tags: [inference, agent]
+provider: opencode
+session_id: ses-build123
+---
+
+# Fix Spurious File Creation
+
+## Summary
+Fixed spurious file creation issue.
+
+## Decisions
+- Used custom agent approach
+
+━━━ ✅ VERIFY ━━━ 6/7
+All good.`;
+      const result = parseSummaryOutput(shakaWrapped);
+      expect(result).not.toBeNull();
+      expect(result?.metadata.date).toBe("2026-02-10");
+      expect(result?.title).toBe("Fix Spurious File Creation");
+      expect(result?.body).toContain("## Summary");
+      expect(result?.body).toContain("## Decisions");
+      // SHAKA wrapper sections after the summary should be stripped or included
+      // The body captures everything after the title within the frontmatter block
+    });
+
+    test("normalizes non-standard provider values", () => {
+      const nonStandardProvider = `---
+date: 2026-02-10
+cwd: /projects/myapp
+tags: [test]
+provider: openrouter/anthropic/claude-haiku-4.5
+session_id: ses-abc123
+---
+
+# Session with custom provider
+
+## Summary
+Works with non-standard provider string.
+`;
+      const result = parseSummaryOutput(nonStandardProvider);
+      expect(result).not.toBeNull();
+      expect(result?.metadata.provider).toBe("opencode");
+      expect(result?.title).toBe("Session with custom provider");
     });
 
     test("returns null when title heading is missing", () => {
