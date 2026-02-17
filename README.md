@@ -149,6 +149,9 @@ shaka reload-hooks            # Re-discover hooks and regenerate provider config
 shaka doctor                  # Check installation health
 shaka mcp serve               # Start MCP server (for Claude Code tool integration)
 shaka memory search <query>   # Search session summaries
+shaka memory review           # Browse and manage learnings interactively
+shaka memory review --prune   # AI-assisted quality assessment of learnings
+shaka memory consolidate      # Merge duplicate and contradictory learnings
 ```
 
 ### Init Flow
@@ -324,6 +327,8 @@ Persistent context that survives sessions. The memory system captures what happe
 - **Summary storage** — Summaries are stored as markdown in `memory/summaries/` with a JSON index for fast lookup
 - **Session context** — The `session-start` hook loads recent summaries into context so the AI knows what you worked on recently
 - **Search** — `shaka memory search <query>` searches summaries by keyword; also available as an MCP tool for in-session search
+- **Review** — `shaka memory review` provides an interactive TUI for browsing, filtering, and deleting learnings. `--prune` adds AI-assisted quality scoring to flag low-value entries
+- **Consolidation** — `shaka memory consolidate` merges duplicate learnings and resolves contradictions
 - **Security event logging** — The security validator writes logs to `memory/security/`
 
 **Planned:** Semantic retrieval via vector search (likely sqlite-vec), tiered memory with importance scoring.
