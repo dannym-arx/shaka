@@ -186,6 +186,7 @@ function daysBetween(dateStr: string, now: Date, windowDays: number): number {
 }
 
 function recencyScore(entry: LearningEntry, now: Date, windowDays: number): number {
+  if (windowDays <= 0) return 0;
   if (entry.exposures.length === 0) return 0;
   const lastExposure = entry.exposures[entry.exposures.length - 1];
   if (!lastExposure) return 0;
