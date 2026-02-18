@@ -6,7 +6,7 @@
  */
 
 import { join } from "node:path";
-import { resolveShakaHome, searchMemory } from "shaka";
+import { type SearchFilter, resolveShakaHome, searchMemory } from "shaka";
 
 export default {
   name: "memory-search",
@@ -21,6 +21,19 @@ export default {
         type: "string" as const,
         description: "Search query (case-insensitive substring match)",
       },
+      category: {
+        type: "string" as const,
+        description: "Filter learnings by category (correction/preference/pattern/fact)",
+      },
+      cwd: {
+        type: "string" as const,
+        description: "Filter by working directory (substring match)",
+      },
+      type: {
+        type: "string" as const,
+        enum: ["session", "learning"],
+        description: "Filter by result type",
+      },
     },
     required: ["query"],
   },
@@ -29,9 +42,18 @@ export default {
     const query = args.query as string;
     if (!query) return "Error: query is required";
 
+    const filter: SearchFilter | undefined =
+      args.category || args.cwd || args.type
+        ? {
+            category: args.category as string | undefined,
+            cwd: args.cwd as string | undefined,
+            type: args.type as "session" | "learning" | undefined,
+          }
+        : undefined;
+
     const shakaHome = resolveShakaHome();
     const memoryDir = join(shakaHome, "memory");
-    const results = await searchMemory(query, memoryDir);
+    const results = await searchMemory(query, memoryDir, filter);
 
     if (results.length === 0) {
       return `No session memories found matching "${query}"`;

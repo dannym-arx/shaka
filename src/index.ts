@@ -83,7 +83,7 @@ export {
   selectRecentSummaries,
 } from "./memory/storage";
 
-export { type SearchResult, searchMemory } from "./memory/search";
+export { type SearchFilter, type SearchResult, searchMemory } from "./memory/search";
 
 export {
   type LearningEntry,

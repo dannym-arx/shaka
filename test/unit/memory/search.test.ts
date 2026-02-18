@@ -3,7 +3,7 @@ import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { writeLearnings } from "../../../src/memory/learnings";
-import { type SearchResult, searchMemory } from "../../../src/memory/search";
+import { type SearchFilter, type SearchResult, searchMemory } from "../../../src/memory/search";
 import { writeSummary } from "../../../src/memory/storage";
 import type { SessionSummary } from "../../../src/memory/summarize";
 
@@ -325,5 +325,165 @@ describe("searchMemory", () => {
     await rm(testMemoryDir, { recursive: true, force: true });
     const results = await searchMemory("anything", testMemoryDir);
     expect(results).toEqual([]);
+  });
+
+  // --- Filter tests ---
+
+  test("filter by type: learning only", async () => {
+    await writeSummary(
+      testMemoryDir,
+      makeSummary({
+        title: "Session about testing patterns",
+        body: "## Summary\nTesting patterns used.",
+        sessionId: "ses-filt0001",
+      }),
+    );
+    await writeLearnings(testMemoryDir, [
+      {
+        category: "pattern",
+        cwds: ["/projects/myapp"],
+        exposures: [{ date: "2026-02-11", sessionHash: "aaaa0000" }],
+        nonglobal: false,
+        title: "Testing patterns for Bun",
+        body: "Use bun:test for testing patterns.",
+      },
+    ]);
+
+    const results = await searchMemory("testing patterns", testMemoryDir, { type: "learning" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.type).toBe("learning");
+  });
+
+  test("filter by type: session only", async () => {
+    await writeSummary(
+      testMemoryDir,
+      makeSummary({
+        title: "Session about testing patterns",
+        body: "## Summary\nTesting patterns used.",
+        sessionId: "ses-filt0002",
+      }),
+    );
+    await writeLearnings(testMemoryDir, [
+      {
+        category: "pattern",
+        cwds: ["/projects/myapp"],
+        exposures: [{ date: "2026-02-11", sessionHash: "aaaa0000" }],
+        nonglobal: false,
+        title: "Testing patterns for Bun",
+        body: "Use bun:test for testing patterns.",
+      },
+    ]);
+
+    const results = await searchMemory("testing patterns", testMemoryDir, { type: "session" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.type).toBe("session");
+  });
+
+  test("filter by category: only matching learnings returned", async () => {
+    await writeLearnings(testMemoryDir, [
+      {
+        category: "correction",
+        cwds: ["/projects/myapp"],
+        exposures: [{ date: "2026-02-11", sessionHash: "aaaa0000" }],
+        nonglobal: false,
+        title: "Always use Bun runtime",
+        body: "Correction about runtime.",
+      },
+      {
+        category: "preference",
+        cwds: ["/projects/myapp"],
+        exposures: [{ date: "2026-02-11", sessionHash: "bbbb0000" }],
+        nonglobal: false,
+        title: "Prefer Bun APIs",
+        body: "Preference for Bun.",
+      },
+    ]);
+
+    const results = await searchMemory("Bun", testMemoryDir, { category: "correction" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.title).toBe("Always use Bun runtime");
+    expect(results[0]?.category).toBe("correction");
+  });
+
+  test("filter by cwd: filters sessions by cwd", async () => {
+    await writeSummary(
+      testMemoryDir,
+      makeSummary({
+        title: "Session in myapp",
+        body: "## Summary\nWork on refactoring.",
+        cwd: "/projects/myapp",
+        sessionId: "ses-cwd00001",
+      }),
+    );
+    await writeSummary(
+      testMemoryDir,
+      makeSummary({
+        title: "Session in other",
+        body: "## Summary\nRefactoring elsewhere.",
+        cwd: "/projects/other",
+        sessionId: "ses-cwd00002",
+      }),
+    );
+
+    const results = await searchMemory("refactoring", testMemoryDir, { cwd: "myapp" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.title).toBe("Session in myapp");
+  });
+
+  test("filter by cwd: filters learnings by cwd", async () => {
+    await writeLearnings(testMemoryDir, [
+      {
+        category: "pattern",
+        cwds: ["/projects/myapp"],
+        exposures: [{ date: "2026-02-11", sessionHash: "aaaa0000" }],
+        nonglobal: false,
+        title: "App-specific pattern",
+        body: "Important insight for app.",
+      },
+      {
+        category: "pattern",
+        cwds: ["/projects/other"],
+        exposures: [{ date: "2026-02-11", sessionHash: "bbbb0000" }],
+        nonglobal: false,
+        title: "Other-specific pattern",
+        body: "Important insight for other.",
+      },
+    ]);
+
+    const results = await searchMemory("insight", testMemoryDir, { cwd: "myapp" });
+    expect(results).toHaveLength(1);
+    expect(results[0]?.title).toBe("App-specific pattern");
+  });
+
+  test("custom maxResults limits output", async () => {
+    for (let i = 0; i < 5; i++) {
+      await writeSummary(
+        testMemoryDir,
+        makeSummary({
+          title: `Session ${i} about deployment`,
+          sessionId: `ses-max${String(i).padStart(5, "0")}`,
+        }),
+      );
+    }
+
+    const results = await searchMemory("deployment", testMemoryDir, undefined, 3);
+    expect(results).toHaveLength(3);
+  });
+
+  test("learning results include category field", async () => {
+    await writeLearnings(testMemoryDir, [
+      {
+        category: "fact",
+        cwds: ["*"],
+        exposures: [{ date: "2026-02-11", sessionHash: "aaaa0000" }],
+        nonglobal: false,
+        title: "Project supports Windows",
+        body: "Cross-platform fact.",
+      },
+    ]);
+
+    const results = await searchMemory("Windows", testMemoryDir);
+    expect(results).toHaveLength(1);
+    expect(results[0]?.category).toBe("fact");
   });
 });
