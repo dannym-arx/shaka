@@ -32,6 +32,9 @@ const DEFAULT_SESSIONS_BUDGET = 5000;
 /** Default max characters for learnings context (~6KB) */
 const DEFAULT_LEARNINGS_BUDGET = 6000;
 
+/** Default recency window for learnings scoring */
+const DEFAULT_RECENCY_WINDOW_DAYS = 90;
+
 /**
  * Resolve the defaults/user/ directory from the system/ symlink.
  *
@@ -112,7 +115,11 @@ async function loadUserFiles(shakaHome: string): Promise<string[]> {
  * Load learned knowledge for context.
  * Returns a formatted markdown section, or empty string if none available.
  */
-async function loadLearnedKnowledge(shakaHome: string, budget: number): Promise<string> {
+async function loadLearnedKnowledge(
+  shakaHome: string,
+  budget: number,
+  recencyWindowDays: number,
+): Promise<string> {
   const memoryDir = join(shakaHome, "memory");
   const cwd = process.cwd();
 
@@ -120,7 +127,7 @@ async function loadLearnedKnowledge(shakaHome: string, budget: number): Promise<
     const entries = await loadLearnings(memoryDir);
     if (entries.length === 0) return "";
 
-    const selected = selectLearnings(entries, cwd, budget);
+    const selected = selectLearnings(entries, cwd, budget, recencyWindowDays);
     if (selected.length === 0) return "";
 
     const rendered = selected.map(renderEntry).join("\n\n---\n\n");
@@ -196,6 +203,7 @@ async function main() {
   const config = await loadConfig(shakaHome);
   const learningsBudget = config?.memory?.learnings_budget ?? DEFAULT_LEARNINGS_BUDGET;
   const sessionsBudget = config?.memory?.sessions_budget ?? DEFAULT_SESSIONS_BUDGET;
+  const recencyWindowDays = config?.memory?.recency_window_days ?? DEFAULT_RECENCY_WINDOW_DAYS;
 
   // Clean up stale session-end temp files (from crashed workers)
   const memoryDir = join(shakaHome, "memory");
@@ -231,7 +239,7 @@ async function main() {
 
   // Load learnings (between user files and sessions — stable knowledge first)
   t = performance.now();
-  const learningsSection = await loadLearnedKnowledge(shakaHome, learningsBudget);
+  const learningsSection = await loadLearnedKnowledge(shakaHome, learningsBudget, recencyWindowDays);
   if (learningsSection) {
     contextParts.push(learningsSection);
     mark("Loaded learnings", t, `${learningsSection.length} chars`);
