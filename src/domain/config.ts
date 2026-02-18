@@ -244,15 +244,15 @@ export async function ensureConfigComplete(shakaHome: string): Promise<boolean> 
     changed = true;
   }
 
-  if (config.memory === undefined) {
-    config.memory = {
-      learnings_budget: 6000,
-      sessions_budget: 5000,
-      recency_window_days: 90,
-      search_max_results: 10,
-    };
-    changed = true;
-  }
+  const memoryDefaults = {
+    learnings_budget: 6000,
+    sessions_budget: 5000,
+    recency_window_days: 90,
+    search_max_results: 10,
+  };
+  const before = JSON.stringify(config.memory);
+  config.memory = { ...memoryDefaults, ...(config.memory as object) };
+  if (JSON.stringify(config.memory) !== before) changed = true;
 
   if (changed) {
     await Bun.write(configPath, `${JSON.stringify(config, null, 2)}\n`);
