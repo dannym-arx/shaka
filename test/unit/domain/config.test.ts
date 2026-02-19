@@ -556,7 +556,7 @@ describe("Config", () => {
 
     test("adds memory section to config missing it", async () => {
       const config = {
-        version: "0.3.2",
+        version: "0.3.3",
         reasoning: { enabled: true },
         permissions: { managed: true },
         providers: { claude: { enabled: true }, opencode: { enabled: false } },
@@ -579,7 +579,7 @@ describe("Config", () => {
 
     test("does not modify config that already has memory section", async () => {
       const config = {
-        version: "0.3.2",
+        version: "0.3.3",
         reasoning: { enabled: true },
         permissions: { managed: true },
         providers: { claude: { enabled: true }, opencode: { enabled: false } },
@@ -605,7 +605,7 @@ describe("Config", () => {
   describe("validateConfig - memory section", () => {
     test("accepts config with memory section", () => {
       const config = {
-        version: "0.3.2",
+        version: "0.3.3",
         reasoning: { enabled: true },
         permissions: { managed: true },
         providers: { claude: { enabled: false }, opencode: { enabled: false } },
@@ -622,7 +622,7 @@ describe("Config", () => {
 
     test("accepts config without memory section", () => {
       const config = {
-        version: "0.3.2",
+        version: "0.3.3",
         reasoning: { enabled: true },
         permissions: { managed: true },
         providers: { claude: { enabled: false }, opencode: { enabled: false } },

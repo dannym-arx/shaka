@@ -4,7 +4,7 @@ A personal AI assistant framework. Provider-agnostic. Clear architecture. Your d
 
 ## Status
 
-**v0.3.2** — Core infrastructure, session memory, and continuous learning. Shaka sets up your environment, injects context into AI sessions, validates tool usage for security, summarizes sessions, learns from your corrections and preferences, manages default permissions, and works with both Claude Code and opencode.
+**v0.3.3** — Core infrastructure, session memory, and continuous learning. Shaka sets up your environment, injects context into AI sessions, validates tool usage for security, summarizes sessions, learns from your corrections and preferences, manages default permissions, and works with both Claude Code and opencode.
 
 | Area                       | Status  | Notes                                                                        |
 | -------------------------- | ------- | ---------------------------------------------------------------------------- |
@@ -19,7 +19,7 @@ A personal AI assistant framework. Provider-agnostic. Clear architecture. Your d
 | Skills (markdown)          | Done    | 5 skills: BeCreative, Council, RedTeam, Science, FirstPrinciples             |
 | Agents (markdown)          | Done    | 12 agent definitions                                                         |
 | Doctor command             | Done    | Health checks for installation                                               |
-| Tests                      | Done    | 550+ unit tests, Docker-based E2E                                            |
+| Tests                      | Done    | 630+ unit tests, Docker-based E2E                                            |
 | Tools                      | Done    | `inference.ts` + `memory-search.ts`; MCP server exposes to Claude Code       |
 | Memory                     | Done    | Session summaries, continuous learning, search via CLI + MCP                 |
 | TUI                        | Planned | No interactive terminal UI yet                                               |
@@ -148,7 +148,8 @@ shaka uninstall               # Remove hooks and config
 shaka reload-hooks            # Re-discover hooks and regenerate provider configs
 shaka doctor                  # Check installation health
 shaka mcp serve               # Start MCP server (for Claude Code tool integration)
-shaka memory search <query>   # Search session summaries
+shaka memory search <query>   # Search session summaries and learnings
+shaka memory stats            # Show learnings count, exposures, and category breakdown
 shaka memory review           # Browse and manage learnings interactively
 shaka memory review --prune   # AI-assisted quality assessment of learnings
 shaka memory consolidate      # Merge duplicate and contradictory learnings
