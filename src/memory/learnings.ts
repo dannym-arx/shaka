@@ -226,8 +226,9 @@ export function selectLearnings(
   // Scoped entries for unrelated projects are excluded before scoring
   const relevant = entries.filter((e) => matchesCwd(e, cwd));
 
+  const now = new Date();
   const scored = relevant
-    .map((entry) => ({ entry, score: scoreEntry(entry, new Date(), recencyWindowDays) }))
+    .map((entry) => ({ entry, score: scoreEntry(entry, now, recencyWindowDays) }))
     .sort((a, b) => b.score - a.score);
 
   const selected: LearningEntry[] = [];
