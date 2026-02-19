@@ -4,6 +4,25 @@ All notable changes to Shaka are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.3.3] — 2026-02-19
+
+### Added
+
+- **`shaka memory stats` command** — Shows learnings count, total exposures, category breakdown, CWD distribution, and oldest/newest entries
+- **Search metadata filters** — `shaka memory search` now supports `--type` (session/learning) and `--after`/`--before` date filters
+- **Config-driven memory budgets** — `memory.learnings_budget`, `memory.sessions_budget`, `memory.recency_window_days`, and `memory.search_max_results` are now configurable in `config.json`
+- **Stale temp file cleanup** — Session-start hook removes orphaned `.session-end-input-*.json` files older than 1 hour
+
+### Fixed
+
+- **Config upgrade backfills partial memory blocks** — `ensureConfigComplete()` now backfills individual missing memory subfields instead of only creating the block when entirely absent
+- **Configured recency window now honored** — Session-start hook passes `config.memory.recency_window_days` through to `selectLearnings` instead of always using the hardcoded default
+- **Zero/negative recency window guard** — `recencyScore` returns 0 when `windowDays <= 0` to prevent NaN from poisoning sort ordering
+
+### Changed
+
+- **Scoring timestamp hoisted** — `selectLearnings` captures `new Date()` once before mapping instead of per-entry
+
 ## [0.3.2] — 2026-02-17
 
 ### Added
@@ -170,6 +189,7 @@ Initial release. Core infrastructure for a provider-agnostic AI assistant framew
 - **E2E tests** — Docker-based end-to-end tests for both providers
 - **Unit tests** — 200+ tests covering core logic
 
+[0.3.3]: https://github.com/jgmontoya/shaka/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/jgmontoya/shaka/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/jgmontoya/shaka/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jgmontoya/shaka/compare/v0.2.2...v0.3.0

@@ -490,7 +490,7 @@ describe("Config", () => {
       expect(updated.permissions).toEqual({ managed: true });
     });
 
-    test("does not modify config that already has permissions", async () => {
+    test("does not modify config that already has all sections", async () => {
       const config = {
         version: "0.3.0",
         reasoning: { enabled: true },
@@ -498,6 +498,12 @@ describe("Config", () => {
         providers: { claude: { enabled: true }, opencode: { enabled: false } },
         assistant: { name: "Shaka" },
         principal: { name: "Chief" },
+        memory: {
+          learnings_budget: 6000,
+          sessions_budget: 5000,
+          recency_window_days: 90,
+          search_max_results: 10,
+        },
       };
       await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
 
@@ -533,6 +539,125 @@ describe("Config", () => {
       expect(updated.principal.name).toBe("Bruce");
       expect(updated.providers.claude.summarization_model).toBe("sonnet");
       expect(updated.permissions).toEqual({ managed: true });
+    });
+  });
+
+  describe("ensureConfigComplete - memory section", () => {
+    const testShakaHome = join(tmpdir(), "shaka-test-ensure-memory");
+
+    beforeEach(async () => {
+      await rm(testShakaHome, { recursive: true, force: true });
+      await mkdir(testShakaHome, { recursive: true });
+    });
+
+    afterEach(async () => {
+      await rm(testShakaHome, { recursive: true, force: true });
+    });
+
+    test("adds memory section to config missing it", async () => {
+      const config = {
+        version: "0.3.3",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: { claude: { enabled: true }, opencode: { enabled: false } },
+        assistant: { name: "Shaka" },
+        principal: { name: "Chief" },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const changed = await ensureConfigComplete(testShakaHome);
+
+      expect(changed).toBe(true);
+      const updated = await Bun.file(`${testShakaHome}/config.json`).json();
+      expect(updated.memory).toEqual({
+        learnings_budget: 6000,
+        sessions_budget: 5000,
+        recency_window_days: 90,
+        search_max_results: 10,
+      });
+    });
+
+    test("backfills missing fields in partial memory section", async () => {
+      const config = {
+        version: "0.3.3",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: { claude: { enabled: true }, opencode: { enabled: false } },
+        assistant: { name: "Shaka" },
+        principal: { name: "Chief" },
+        memory: { learnings_budget: 3000 },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const changed = await ensureConfigComplete(testShakaHome);
+
+      expect(changed).toBe(true);
+      const updated = await Bun.file(`${testShakaHome}/config.json`).json();
+      expect(updated.memory).toEqual({
+        learnings_budget: 3000,
+        sessions_budget: 5000,
+        recency_window_days: 90,
+        search_max_results: 10,
+      });
+    });
+
+    test("does not modify config that already has memory section", async () => {
+      const config = {
+        version: "0.3.3",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: { claude: { enabled: true }, opencode: { enabled: false } },
+        assistant: { name: "Shaka" },
+        principal: { name: "Chief" },
+        memory: {
+          learnings_budget: 3000,
+          sessions_budget: 2000,
+          recency_window_days: 60,
+          search_max_results: 5,
+        },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const changed = await ensureConfigComplete(testShakaHome);
+
+      expect(changed).toBe(false);
+      const updated = await Bun.file(`${testShakaHome}/config.json`).json();
+      expect(updated.memory.learnings_budget).toBe(3000);
+    });
+  });
+
+  describe("validateConfig - memory section", () => {
+    test("accepts config with memory section", () => {
+      const config = {
+        version: "0.3.3",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: { claude: { enabled: false }, opencode: { enabled: false } },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+        memory: { learnings_budget: 6000 },
+      };
+      const result = validateConfig(config);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.memory?.learnings_budget).toBe(6000);
+      }
+    });
+
+    test("accepts config without memory section", () => {
+      const config = {
+        version: "0.3.3",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: { claude: { enabled: false }, opencode: { enabled: false } },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+      };
+      const result = validateConfig(config);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.memory).toBeUndefined();
+      }
     });
   });
 

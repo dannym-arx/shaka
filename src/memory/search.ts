@@ -11,8 +11,14 @@ import { join } from "node:path";
 import { loadLearnings, renderEntry } from "./learnings";
 import { parseSummaryOutput } from "./summarize";
 
-const MAX_RESULTS = 10;
+const DEFAULT_MAX_RESULTS = 10;
 const SNIPPET_LENGTH = 200;
+
+export interface SearchFilter {
+  readonly category?: string;
+  readonly cwd?: string;
+  readonly type?: "session" | "learning";
+}
 
 export interface SearchResult {
   readonly type: "session" | "learning";
@@ -21,26 +27,38 @@ export interface SearchResult {
   readonly date: string;
   readonly tags: string[];
   readonly snippet: string;
+  readonly category?: string;
 }
 
 /**
  * Search sessions and learnings for a query string.
  *
  * Performs case-insensitive substring matching across both data sources.
- * Returns up to 10 results sorted by date (most recent first).
+ * Returns up to maxResults (default 10) sorted by date (most recent first).
  */
-export async function searchMemory(query: string, memoryDir: string): Promise<SearchResult[]> {
+export async function searchMemory(
+  query: string,
+  memoryDir: string,
+  filter?: SearchFilter,
+  maxResults?: number,
+): Promise<SearchResult[]> {
+  const limit = maxResults ?? DEFAULT_MAX_RESULTS;
+
   const [sessionResults, learningResults] = await Promise.all([
-    searchSessions(query, memoryDir),
-    searchLearnings(query, memoryDir),
+    filter?.type === "learning" ? [] : searchSessions(query, memoryDir, filter),
+    filter?.type === "session" ? [] : searchLearnings(query, memoryDir, filter),
   ]);
 
   return [...learningResults, ...sessionResults]
     .sort((a, b) => b.date.localeCompare(a.date))
-    .slice(0, MAX_RESULTS);
+    .slice(0, limit);
 }
 
-async function searchSessions(query: string, memoryDir: string): Promise<SearchResult[]> {
+async function searchSessions(
+  query: string,
+  memoryDir: string,
+  filter?: SearchFilter,
+): Promise<SearchResult[]> {
   const sessionsDir = join(memoryDir, "sessions");
   const queryLower = query.toLowerCase();
 
@@ -71,6 +89,10 @@ async function searchSessions(query: string, memoryDir: string): Promise<SearchR
     const summary = parseSummaryOutput(content);
     if (!summary) continue;
 
+    if (filter?.cwd && !summary.metadata.cwd.toLowerCase().includes(filter.cwd.toLowerCase())) {
+      continue;
+    }
+
     results.push({
       type: "session",
       filePath,
@@ -84,7 +106,11 @@ async function searchSessions(query: string, memoryDir: string): Promise<SearchR
   return results;
 }
 
-async function searchLearnings(query: string, memoryDir: string): Promise<SearchResult[]> {
+async function searchLearnings(
+  query: string,
+  memoryDir: string,
+  filter?: SearchFilter,
+): Promise<SearchResult[]> {
   const entries = await loadLearnings(memoryDir);
   if (entries.length === 0) return [];
 
@@ -92,6 +118,13 @@ async function searchLearnings(query: string, memoryDir: string): Promise<Search
   const results: SearchResult[] = [];
 
   for (const entry of entries) {
+    if (filter?.category && entry.category !== filter.category) continue;
+    if (
+      filter?.cwd &&
+      !entry.cwds.some((c) => c.toLowerCase().includes(filter.cwd?.toLowerCase() ?? ""))
+    )
+      continue;
+
     const searchable = `${entry.title}\n${entry.body}`.toLowerCase();
     if (!searchable.includes(queryLower)) continue;
 
@@ -104,6 +137,7 @@ async function searchLearnings(query: string, memoryDir: string): Promise<Search
       date: lastExposure?.date ?? "",
       tags: [entry.category],
       snippet: extractSnippet(renderEntry(entry), queryLower),
+      category: entry.category,
     });
   }
 

@@ -33,6 +33,12 @@ export interface ShakaConfig {
   readonly principal: {
     readonly name: string;
   };
+  readonly memory?: {
+    readonly learnings_budget?: number;
+    readonly sessions_budget?: number;
+    readonly recency_window_days?: number;
+    readonly search_max_results?: number;
+  };
 }
 
 export function validateConfig(config: unknown): Result<ShakaConfig, Error> {
@@ -237,6 +243,16 @@ export async function ensureConfigComplete(shakaHome: string): Promise<boolean> 
     config.permissions = { managed: true };
     changed = true;
   }
+
+  const memoryDefaults = {
+    learnings_budget: 6000,
+    sessions_budget: 5000,
+    recency_window_days: 90,
+    search_max_results: 10,
+  };
+  const before = JSON.stringify(config.memory);
+  config.memory = { ...memoryDefaults, ...(config.memory as object) };
+  if (JSON.stringify(config.memory) !== before) changed = true;
 
   if (changed) {
     await Bun.write(configPath, `${JSON.stringify(config, null, 2)}\n`);

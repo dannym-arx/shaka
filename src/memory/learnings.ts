@@ -36,7 +36,7 @@ export interface LearningEntry {
 
 // --- Scoring constants ---
 
-const RECENCY_WINDOW_DAYS = 90;
+const DEFAULT_RECENCY_WINDOW_DAYS = 90;
 const REINFORCEMENT_SATURATE = 4;
 const DEFAULT_BUDGET = 6000;
 
@@ -178,19 +178,20 @@ export async function writeLearnings(memoryDir: string, entries: LearningEntry[]
 
 // --- Scoring ---
 
-function daysBetween(dateStr: string, now: Date): number {
+function daysBetween(dateStr: string, now: Date, windowDays: number): number {
   const date = new Date(dateStr);
   const ms = date.getTime();
-  if (Number.isNaN(ms)) return RECENCY_WINDOW_DAYS;
+  if (Number.isNaN(ms)) return windowDays;
   return Math.max(0, (now.getTime() - ms) / (1000 * 60 * 60 * 24));
 }
 
-function recencyScore(entry: LearningEntry, now: Date): number {
+function recencyScore(entry: LearningEntry, now: Date, windowDays: number): number {
+  if (windowDays <= 0) return 0;
   if (entry.exposures.length === 0) return 0;
   const lastExposure = entry.exposures[entry.exposures.length - 1];
   if (!lastExposure) return 0;
-  const days = daysBetween(lastExposure.date, now);
-  return Math.max(0, 1.0 - days / RECENCY_WINDOW_DAYS);
+  const days = daysBetween(lastExposure.date, now, windowDays);
+  return Math.max(0, 1.0 - days / windowDays);
 }
 
 function reinforcementScore(entry: LearningEntry): number {
@@ -206,8 +207,12 @@ function matchesCwd(entry: LearningEntry, cwd: string): boolean {
 }
 
 /** Score a single entry for context loading. Range: 0.0 to 2.0. */
-export function scoreEntry(entry: LearningEntry, now = new Date()): number {
-  return recencyScore(entry, now) + reinforcementScore(entry);
+export function scoreEntry(
+  entry: LearningEntry,
+  now = new Date(),
+  recencyWindowDays = DEFAULT_RECENCY_WINDOW_DAYS,
+): number {
+  return recencyScore(entry, now, recencyWindowDays) + reinforcementScore(entry);
 }
 
 /** Select entries for context loading within a character budget. */
@@ -215,13 +220,15 @@ export function selectLearnings(
   entries: LearningEntry[],
   cwd: string,
   budget = DEFAULT_BUDGET,
+  recencyWindowDays = DEFAULT_RECENCY_WINDOW_DAYS,
 ): LearningEntry[] {
   // Pre-filter: only global entries and CWD-matching entries are candidates.
   // Scoped entries for unrelated projects are excluded before scoring
   const relevant = entries.filter((e) => matchesCwd(e, cwd));
 
+  const now = new Date();
   const scored = relevant
-    .map((entry) => ({ entry, score: scoreEntry(entry) }))
+    .map((entry) => ({ entry, score: scoreEntry(entry, now, recencyWindowDays) }))
     .sort((a, b) => b.score - a.score);
 
   const selected: LearningEntry[] = [];

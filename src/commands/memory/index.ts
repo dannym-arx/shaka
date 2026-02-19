@@ -6,8 +6,9 @@
 import { join } from "node:path";
 import { Command } from "commander";
 import { resolveShakaHome } from "../../domain/config";
-import { searchMemory } from "../../memory/search";
-import { listSummaries } from "../../memory/storage";
+import { type LearningEntry, loadLearnings } from "../../memory/learnings";
+import { type SearchFilter, searchMemory } from "../../memory/search";
+import { type SummaryIndex, listSummaries } from "../../memory/storage";
 import { runConsolidation } from "./consolidate";
 import { runReview } from "./review";
 
@@ -27,10 +28,25 @@ export function createMemoryCommand(): Command {
   memory
     .command("search <query>")
     .description("Search session summaries and learnings for a query")
-    .action(async (query: string) => {
+    .option(
+      "--category <category>",
+      "Filter learnings by category (correction/preference/pattern/fact)",
+    )
+    .option("--cwd <path>", "Filter by working directory (substring match)")
+    .option("--type <type>", "Filter by result type (session/learning)")
+    .action(async (query: string, options: { category?: string; cwd?: string; type?: string }) => {
       const memoryDir = resolveMemoryDir();
 
-      const results = await searchMemory(query, memoryDir);
+      const filter: SearchFilter | undefined =
+        options.category || options.cwd || options.type
+          ? {
+              category: options.category,
+              cwd: options.cwd,
+              type: options.type as "session" | "learning" | undefined,
+            }
+          : undefined;
+
+      const results = await searchMemory(query, memoryDir, filter);
 
       if (results.length === 0) {
         console.log(`No results for "${query}"`);
@@ -102,7 +118,77 @@ export function createMemoryCommand(): Command {
       await runReview(memoryDir, options);
     });
 
+  memory
+    .command("stats")
+    .description("Show memory system health at a glance")
+    .action(async () => {
+      const memoryDir = resolveMemoryDir();
+      const [learnings, summaries] = await Promise.all([
+        loadLearnings(memoryDir),
+        listSummaries(memoryDir),
+      ]);
+      printLearningsStats(learnings);
+      printSessionsStats(summaries);
+    });
+
   return memory;
+}
+
+function countBy<T>(items: T[], key: (item: T) => string): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const item of items) {
+    const k = key(item);
+    counts[k] = (counts[k] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function formatCounts(counts: Record<string, number>, sep = "  |  "): string {
+  return Object.entries(counts)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(sep);
+}
+
+function printLearningsStats(learnings: LearningEntry[]): void {
+  console.log(`Learnings: ${learnings.length} total`);
+  if (learnings.length === 0) return;
+
+  const cats = countBy(learnings, (e) => e.category);
+  const globalCount = learnings.filter((e) => e.cwds.includes("*")).length;
+
+  console.log(`  ${formatCounts(cats)}`);
+  console.log(`  global: ${globalCount}  |  project-scoped: ${learnings.length - globalCount}`);
+
+  const cwdFreq = countBy(
+    learnings.flatMap((e) => e.cwds.filter((c) => c !== "*")),
+    (c) => c,
+  );
+  const topCwds = Object.entries(cwdFreq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3)
+    .map(([path, count]) => `${path} (${count})`)
+    .join(", ");
+  if (topCwds) console.log(`  top CWDs: ${topCwds}`);
+
+  const lastExtraction = learnings.reduce((latest, e) => {
+    const last = e.exposures[e.exposures.length - 1];
+    return last && last.date > latest ? last.date : latest;
+  }, "");
+  if (lastExtraction) console.log(`\nLast extraction: ${lastExtraction}`);
+}
+
+function printSessionsStats(summaries: SummaryIndex[]): void {
+  console.log(`\nSessions: ${summaries.length} summaries`);
+  if (summaries.length === 0) return;
+
+  const dates = summaries.map((s) => s.date).sort();
+  console.log(`  date range: ${dates[0]} — ${dates[dates.length - 1]}`);
+
+  const providers = countBy(summaries, (s) => s.provider);
+  const provLine = Object.entries(providers)
+    .map(([k, v]) => `${k} (${v})`)
+    .join(", ");
+  console.log(`  providers: ${provLine}`);
 }
 
 export function promptUser(question: string): Promise<string> {

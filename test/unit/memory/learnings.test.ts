@@ -337,6 +337,27 @@ describe("scoreEntry", () => {
     });
     expect(scoreEntry(entry, now)).toBe(0.0);
   });
+
+  test("custom recency window: 30 days treats 45-day-old entry as stale", () => {
+    const entry = makeEntry({
+      exposures: [{ date: "2025-12-29", sessionHash: "aaaa0000" }], // ~45 days ago from now
+    });
+    // With default 90-day window, this would have ~0.5 recency
+    expect(scoreEntry(entry, now)).toBeGreaterThan(0.4);
+    // With 30-day window, this should be 0 (older than window)
+    expect(scoreEntry(entry, now, 30)).toBe(0.0);
+  });
+
+  test("custom recency window: 180 days treats 60-day-old entry as recent", () => {
+    const entry = makeEntry({
+      exposures: [{ date: "2025-12-14", sessionHash: "aaaa0000" }], // ~60 days ago
+    });
+    // With default 90-day window: ~0.33 recency
+    const defaultScore = scoreEntry(entry, now);
+    // With 180-day window: ~0.67 recency — should be higher
+    const widerScore = scoreEntry(entry, now, 180);
+    expect(widerScore).toBeGreaterThan(defaultScore);
+  });
 });
 
 // --- selectLearnings ---
