@@ -577,6 +577,30 @@ describe("Config", () => {
       });
     });
 
+    test("backfills missing fields in partial memory section", async () => {
+      const config = {
+        version: "0.3.3",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: { claude: { enabled: true }, opencode: { enabled: false } },
+        assistant: { name: "Shaka" },
+        principal: { name: "Chief" },
+        memory: { learnings_budget: 3000 },
+      };
+      await Bun.write(`${testShakaHome}/config.json`, JSON.stringify(config));
+
+      const changed = await ensureConfigComplete(testShakaHome);
+
+      expect(changed).toBe(true);
+      const updated = await Bun.file(`${testShakaHome}/config.json`).json();
+      expect(updated.memory).toEqual({
+        learnings_budget: 3000,
+        sessions_budget: 5000,
+        recency_window_days: 90,
+        search_max_results: 10,
+      });
+    });
+
     test("does not modify config that already has memory section", async () => {
       const config = {
         version: "0.3.3",
