@@ -3,6 +3,7 @@ import { mkdir, rm, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeLink } from "../../../../src/platform/paths";
+import { installCommandsForProviders } from "../../../../src/providers/command-orchestrator";
 import { OpencodeProviderConfigurer } from "../../../../src/providers/opencode/configurer";
 
 describe("OpencodeProviderConfigurer", () => {
@@ -394,6 +395,144 @@ console.log("format");
 
       // Should succeed - generated plugin should be valid
       expect(result.ok).toBe(true);
+    });
+  });
+
+  describe("commands", () => {
+    /** Helper: install + orchestrate commands (the real flow) */
+    async function installWithCommands(configurer: OpencodeProviderConfigurer) {
+      await configurer.install({ shakaHome: testShakaHome });
+      await installCommandsForProviders(testShakaHome, [configurer]);
+    }
+
+    test("installs discovered commands as flat .md files", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nAnalyze staged changes.\n\n$ARGUMENTS",
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+
+      const cmdFile = Bun.file(`${testProjectRoot}/commands/commit.md`);
+      expect(await cmdFile.exists()).toBe(true);
+      const content = await cmdFile.text();
+      expect(content).toContain("description: Create a commit");
+    });
+
+    test("uninstall removes commands but leaves manifest for orchestrator", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nBody",
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+      expect(await Bun.file(`${testProjectRoot}/commands/commit.md`).exists()).toBe(true);
+
+      await configurer.uninstall({ shakaHome: testShakaHome });
+
+      expect(await Bun.file(`${testProjectRoot}/commands/commit.md`).exists()).toBe(false);
+      expect(await Bun.file(`${testShakaHome}/commands-manifest.json`).exists()).toBe(true);
+    });
+
+    test("checkInstallation includes commands status", async () => {
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await configurer.install({ shakaHome: testShakaHome });
+      const status = await configurer.checkInstallation({ shakaHome: testShakaHome });
+
+      expect(status.commands.ok).toBe(true);
+    });
+
+    test("installs scoped command to cwd project directory", async () => {
+      const projectDir = join(testProjectRoot, "my-project");
+      await mkdir(projectDir, { recursive: true });
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        `---\ndescription: Deploy\ncwd: ${projectDir}\n---\nDeploy body`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+
+      const cmdFile = Bun.file(join(projectDir, ".opencode", "commands", "deploy.md"));
+      expect(await cmdFile.exists()).toBe(true);
+      const content = await cmdFile.text();
+      expect(content).toContain("description: Deploy");
+    });
+
+    test("skips scoped command when cwd does not exist", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        "---\ndescription: Deploy\ncwd: /nonexistent/path\n---\nBody",
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+
+      const manifest = await Bun.file(`${testShakaHome}/commands-manifest.json`).json();
+      // Manifest includes the scoped entry (deterministic from discovery),
+      // but the actual file wasn't installed (directory doesn't exist)
+      expect(manifest.scoped["/nonexistent/path"]).toContain("deploy");
+    });
+
+    test("uninstall cleans scoped commands", async () => {
+      const projectDir = join(testProjectRoot, "my-project");
+      await mkdir(projectDir, { recursive: true });
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        `---\ndescription: Deploy\ncwd: ${projectDir}\n---\nBody`,
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+      expect(await Bun.file(join(projectDir, ".opencode", "commands", "deploy.md")).exists()).toBe(true);
+
+      await configurer.uninstall({ shakaHome: testShakaHome });
+
+      expect(await Bun.file(join(projectDir, ".opencode", "commands", "deploy.md")).exists()).toBe(false);
+    });
+
+    test("applies provider overrides during compilation", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/test-cmd.md`,
+        "---\ndescription: Test\nmodel: sonnet\nproviders:\n  opencode:\n    model: anthropic/claude-sonnet-4-5\n---\nBody",
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+
+      const content = await Bun.file(`${testProjectRoot}/commands/test-cmd.md`).text();
+      expect(content).toContain("model: anthropic/claude-sonnet-4-5");
+      expect(content).not.toContain("model: sonnet");
+    });
+
+    test("customization override installs with overridden content", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await mkdir(`${testShakaHome}/customizations/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: System commit\n---\nSystem body",
+      );
+      await Bun.write(
+        `${testShakaHome}/customizations/commands/commit.md`,
+        "---\ndescription: Custom commit\n---\nCustom body",
+      );
+      const configurer = new OpencodeProviderConfigurer({ opencodeConfigDir: testProjectRoot });
+
+      await installWithCommands(configurer);
+
+      const content = await Bun.file(`${testProjectRoot}/commands/commit.md`).text();
+      expect(content).toContain("description: Custom commit");
+      expect(content).toContain("Custom body");
+      expect(content).not.toContain("System body");
     });
   });
 

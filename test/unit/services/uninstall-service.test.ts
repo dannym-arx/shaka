@@ -107,6 +107,21 @@ describe("UninstallService", () => {
       expect(await Bun.file(join(testHome, "config.json")).exists()).toBe(false);
     });
 
+    test("removes commands-manifest.json", async () => {
+      await setupInitializedHome();
+      // Create a manifest file
+      await Bun.write(
+        join(testHome, "commands-manifest.json"),
+        JSON.stringify({ global: ["commit"] }),
+      );
+      const service = createService();
+
+      const removed = await service.removeFrameworkFiles();
+
+      expect(removed).toContain(join(testHome, "commands-manifest.json"));
+      expect(await Bun.file(join(testHome, "commands-manifest.json")).exists()).toBe(false);
+    });
+
     test("handles missing files gracefully", async () => {
       await mkdir(testHome, { recursive: true });
       const service = createService();

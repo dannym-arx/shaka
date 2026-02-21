@@ -47,21 +47,23 @@ function logProviderStatus(
     console.log(`    Hooks:         ${formatStatus(status.hooks.ok, status.hooks.issue)}`);
     console.log(`    Agents:        ${formatStatus(status.agents.ok, status.agents.issue)}`);
     console.log(`    Skills:        ${formatStatus(status.skills.ok, status.skills.issue)}`);
+    console.log(`    Commands:      ${formatStatus(status.commands.ok, status.commands.issue)}`);
 
-    if (!status.hooks.ok || !status.agents.ok || !status.skills.ok) {
+    if (!status.hooks.ok || !status.agents.ok || !status.skills.ok || !status.commands.ok) {
       hasIssues = true;
     }
   } else if (cliInstalled && !enabled) {
     console.log("    Hooks:         – skipped (not enabled)");
     console.log("    Agents:        – skipped (not enabled)");
     console.log("    Skills:        – skipped (not enabled)");
+    console.log("    Commands:      – skipped (not enabled)");
   }
   return hasIssues;
 }
 
 /** Check if all installation components are ok. */
 function isFullyInstalled(status: InstallationStatus): boolean {
-  return status.hooks.ok && status.agents.ok && status.skills.ok;
+  return status.hooks.ok && status.agents.ok && status.skills.ok && status.commands.ok;
 }
 
 interface ProviderMismatch {

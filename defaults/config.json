@@ -1,5 +1,5 @@
 {
-  "version": "0.3.3",
+  "version": "0.4.0",
   "reasoning": {
     "enabled": true
   },
@@ -27,5 +27,8 @@
     "sessions_budget": 5000,
     "recency_window_days": 90,
     "search_max_results": 10
+  },
+  "commands": {
+    "disabled": []
   }
 }

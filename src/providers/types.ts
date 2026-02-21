@@ -4,6 +4,8 @@
  */
 
 import type { Result } from "../domain/result";
+import type { DiscoveredCommand } from "./command-discovery";
+import type { CommandManifest } from "./command-manifest";
 
 export type ProviderName = "claude" | "opencode";
 
@@ -13,14 +15,24 @@ export interface ProviderConfigurer {
   /** Check if provider CLI is installed */
   isInstalled(): boolean;
 
-  /** Install Shaka hooks, agents, and skills for this provider */
+  /** Install Shaka hooks, agents, skills for this provider (excludes commands) */
   install(config: InstallConfig): Promise<Result<void, Error>>;
 
-  /** Uninstall Shaka hooks, agents, and skills */
+  /** Install commands: clean old installs + write new ones. No discovery or manifest I/O. */
+  installCommands(config: CommandInstallConfig): Promise<void>;
+
+  /** Uninstall Shaka hooks, agents, skills, and commands */
   uninstall(config: InstallConfig): Promise<Result<void, Error>>;
 
-  /** Check installation status: hooks, agents, skills */
+  /** Check installation status: hooks, agents, skills, commands */
   checkInstallation(config: InstallConfig): Promise<InstallationStatus>;
+}
+
+export interface CommandInstallConfig {
+  /** Pre-discovered commands to install. */
+  commands: DiscoveredCommand[];
+  /** Current manifest for detecting pre-existing user files. */
+  manifest: CommandManifest;
 }
 
 export type PermissionMode = "apply" | "merge" | "skip";
@@ -40,4 +52,5 @@ export interface InstallationStatus {
   hooks: ComponentStatus;
   agents: ComponentStatus;
   skills: ComponentStatus;
+  commands: ComponentStatus;
 }

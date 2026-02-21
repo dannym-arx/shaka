@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { removeLink } from "../../../../src/platform/paths";
 import { ClaudeProviderConfigurer } from "../../../../src/providers/claude/configurer";
+import { installCommandsForProviders } from "../../../../src/providers/command-orchestrator";
 import {
   HOOK_EVENTS,
   SHAKA_TO_CLAUDE_EVENT,
@@ -493,6 +494,233 @@ console.log("custom");
 
       expect(result.agents.ok).toBe(false);
       expect(result.agents.issue).toContain("wrong location");
+    });
+  });
+
+  describe("commands", () => {
+    /** Helper: install + orchestrate commands (the real flow) */
+    async function installWithCommands(configurer: ClaudeProviderConfigurer) {
+      await configurer.install({ shakaHome: testShakaHome });
+      await installCommandsForProviders(testShakaHome, [configurer]);
+    }
+
+    test("installs discovered commands as skills", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nAnalyze staged changes.\n\n$ARGUMENTS",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const skillFile = Bun.file(`${testClaudeHome}/skills/commit/SKILL.md`);
+      expect(await skillFile.exists()).toBe(true);
+      const content = await skillFile.text();
+      expect(content).toContain("description: Create a commit");
+      expect(content).toContain("user-invocable: true");
+    });
+
+    test("writes manifest after installing commands", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const manifest = await Bun.file(`${testShakaHome}/commands-manifest.json`).json();
+      expect(manifest.global).toContain("commit");
+    });
+
+    test("cleans previous commands on reinstall", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/old-cmd.md`,
+        "---\ndescription: Old command\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      // Install old command
+      await installWithCommands(configurer);
+      expect(await Bun.file(`${testClaudeHome}/skills/old-cmd/SKILL.md`).exists()).toBe(true);
+
+      // Remove old, add new
+      await rm(`${testShakaHome}/system/commands/old-cmd.md`);
+      await Bun.write(
+        `${testShakaHome}/system/commands/new-cmd.md`,
+        "---\ndescription: New command\n---\nBody",
+      );
+
+      await installWithCommands(configurer);
+
+      expect(await Bun.file(`${testClaudeHome}/skills/old-cmd/SKILL.md`).exists()).toBe(false);
+      expect(await Bun.file(`${testClaudeHome}/skills/new-cmd/SKILL.md`).exists()).toBe(true);
+    });
+
+    test("skips pre-existing skill not in manifest", async () => {
+      // Create a pre-existing skill
+      await mkdir(`${testClaudeHome}/skills/commit`, { recursive: true });
+      await Bun.write(`${testClaudeHome}/skills/commit/SKILL.md`, "pre-existing");
+
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      // Should not overwrite the pre-existing skill
+      const content = await Bun.file(`${testClaudeHome}/skills/commit/SKILL.md`).text();
+      expect(content).toBe("pre-existing");
+    });
+
+    test("uninstall removes skills but leaves manifest for orchestrator", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+      expect(await Bun.file(`${testClaudeHome}/skills/commit/SKILL.md`).exists()).toBe(true);
+
+      await configurer.uninstall({ shakaHome: testShakaHome });
+
+      expect(await Bun.file(`${testClaudeHome}/skills/commit/SKILL.md`).exists()).toBe(false);
+      expect(await Bun.file(`${testShakaHome}/commands-manifest.json`).exists()).toBe(true);
+    });
+
+    test("checkInstallation reports commands ok when installed", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: Create a commit\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+      const status = await configurer.checkInstallation({ shakaHome: testShakaHome });
+
+      expect(status.commands.ok).toBe(true);
+    });
+
+    test("checkInstallation reports commands ok when no commands exist", async () => {
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await configurer.install({ shakaHome: testShakaHome });
+      const status = await configurer.checkInstallation({ shakaHome: testShakaHome });
+
+      expect(status.commands.ok).toBe(true);
+    });
+
+    test("installs scoped command to cwd project directory", async () => {
+      const projectDir = join(testClaudeHome, "project");
+      await mkdir(projectDir, { recursive: true });
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        `---\ndescription: Deploy\ncwd: ${projectDir}\n---\nDeploy body`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const skillFile = Bun.file(join(projectDir, ".claude", "skills", "deploy", "SKILL.md"));
+      expect(await skillFile.exists()).toBe(true);
+      const content = await skillFile.text();
+      expect(content).toContain("description: Deploy");
+    });
+
+    test("scoped command recorded in manifest", async () => {
+      const projectDir = join(testClaudeHome, "project");
+      await mkdir(projectDir, { recursive: true });
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        `---\ndescription: Deploy\ncwd: ${projectDir}\n---\nBody`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const manifest = await Bun.file(`${testShakaHome}/commands-manifest.json`).json();
+      expect(manifest.scoped[projectDir]).toContain("deploy");
+    });
+
+    test("skips scoped command when cwd does not exist", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        "---\ndescription: Deploy\ncwd: /nonexistent/path/project\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const manifest = await Bun.file(`${testShakaHome}/commands-manifest.json`).json();
+      // Manifest includes the scoped entry (deterministic from discovery),
+      // but the actual file wasn't installed (directory doesn't exist)
+      expect(manifest.scoped["/nonexistent/path/project"]).toContain("deploy");
+    });
+
+    test("uninstall cleans scoped commands", async () => {
+      const projectDir = join(testClaudeHome, "project");
+      await mkdir(projectDir, { recursive: true });
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/deploy.md`,
+        `---\ndescription: Deploy\ncwd: ${projectDir}\n---\nBody`,
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+      expect(await Bun.file(join(projectDir, ".claude", "skills", "deploy", "SKILL.md")).exists()).toBe(true);
+
+      await configurer.uninstall({ shakaHome: testShakaHome });
+
+      expect(await Bun.file(join(projectDir, ".claude", "skills", "deploy", "SKILL.md")).exists()).toBe(false);
+    });
+
+    test("applies provider overrides during compilation", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/test-cmd.md`,
+        "---\ndescription: Test\nmodel: sonnet\nproviders:\n  claude:\n    model: opus\n---\nBody",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const content = await Bun.file(`${testClaudeHome}/skills/test-cmd/SKILL.md`).text();
+      expect(content).toContain("model: opus");
+      expect(content).not.toContain("model: sonnet");
+    });
+
+    test("customization override installs with overridden content", async () => {
+      await mkdir(`${testShakaHome}/system/commands`, { recursive: true });
+      await mkdir(`${testShakaHome}/customizations/commands`, { recursive: true });
+      await Bun.write(
+        `${testShakaHome}/system/commands/commit.md`,
+        "---\ndescription: System commit\n---\nSystem body",
+      );
+      await Bun.write(
+        `${testShakaHome}/customizations/commands/commit.md`,
+        "---\ndescription: Custom commit\n---\nCustom body",
+      );
+      const configurer = new ClaudeProviderConfigurer({ claudeHome: testClaudeHome });
+
+      await installWithCommands(configurer);
+
+      const content = await Bun.file(`${testClaudeHome}/skills/commit/SKILL.md`).text();
+      expect(content).toContain("description: Custom commit");
+      expect(content).toContain("Custom body");
+      expect(content).not.toContain("System body");
     });
   });
 

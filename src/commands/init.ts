@@ -11,8 +11,9 @@ import { isPermissionsManaged, loadConfig, resolveShakaHome } from "../domain/co
 import { findNewerLocalTag, getGitRef } from "../domain/version";
 import { resolveFromModule } from "../platform/paths";
 import type { ClaudeProviderConfigurer } from "../providers/claude/configurer";
+import { installCommandsForProviders } from "../providers/command-orchestrator";
 import { createProvider } from "../providers/registry";
-import type { ProviderName } from "../providers/types";
+import type { ProviderConfigurer, ProviderName } from "../providers/types";
 import { type InitResult, InitService, type Personalization } from "../services/init-service";
 import { type DetectedProviders, detectInstalledProviders } from "../services/provider-detection";
 import { printOpencodeSummarizationHint } from "./hints";
@@ -158,6 +159,8 @@ async function installProviders(
   const permissionMode = isPermissionsManaged(config) ? undefined : "skip";
 
   const providerNames: ProviderName[] = ["claude", "opencode"];
+  const installedProviders: ProviderConfigurer[] = [];
+
   for (const providerName of providerNames) {
     if (providers[providerName].installed) {
       const provider = createProvider(providerName);
@@ -168,8 +171,14 @@ async function installProviders(
         );
       } else {
         console.log(`  ✓ Installed ${providerName} configuration`);
+        installedProviders.push(provider);
       }
     }
+  }
+
+  // Install commands via orchestrator (discovery + manifest written once)
+  if (installedProviders.length > 0) {
+    await installCommandsForProviders(shakaHome, installedProviders);
   }
 
   // Register MCP server for Claude Code (enables tool integration)

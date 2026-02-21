@@ -136,6 +136,7 @@ export {
 } from "./security";
 
 // Import commands and version
+import { createCommandsCommand } from "./commands/commands";
 import { createConfigCommand } from "./commands/config";
 import { createDoctorCommand } from "./commands/doctor";
 import { createInitCommand } from "./commands/init";
@@ -160,6 +161,7 @@ if (import.meta.main) {
   program.addCommand(createConfigCommand());
   program.addCommand(createMcpCommand());
   program.addCommand(createMemoryCommand());
+  program.addCommand(createCommandsCommand());
 
   program.parse(process.argv);
 }

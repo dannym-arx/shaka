@@ -94,7 +94,10 @@ export class UninstallService {
    */
   async removeFrameworkFiles(): Promise<string[]> {
     const removed: string[] = [];
-    const files = [join(this.shakaHome, "config.json")];
+    const files = [
+      join(this.shakaHome, "config.json"),
+      join(this.shakaHome, "commands-manifest.json"),
+    ];
 
     for (const filePath of files) {
       try {

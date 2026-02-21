@@ -2,30 +2,6 @@
 
 A personal AI assistant framework. Provider-agnostic. Clear architecture. Your data stays yours.
 
-## Status
-
-**v0.3.3** — Core infrastructure, session memory, and continuous learning. Shaka sets up your environment, injects context into AI sessions, validates tool usage for security, summarizes sessions, learns from your corrections and preferences, manages default permissions, and works with both Claude Code and opencode.
-
-| Area                       | Status  | Notes                                                                        |
-| -------------------------- | ------- | ---------------------------------------------------------------------------- |
-| Hook system                | Done    | SessionStart, SessionEnd, PreToolUse, PostToolUse, UserPromptSubmit          |
-| Provider support           | Done    | Claude Code + opencode, both first-class                                     |
-| Init / upgrade / uninstall | Done    | Tag-based releases, safe upgrades                                            |
-| Config system              | Done    | JSON config with validation and override support                             |
-| MCP server                 | Done    | Claude Code tool integration via stdio                                       |
-| Security validation        | Done    | Bash command + file path validation via hooks                                |
-| Base reasoning framework   | Done    | 7-phase algorithm loaded at session start                                    |
-| Customization overrides    | Done    | `customizations/` overrides `system/`                                        |
-| Skills (markdown)          | Done    | 5 skills: BeCreative, Council, RedTeam, Science, FirstPrinciples             |
-| Agents (markdown)          | Done    | 12 agent definitions                                                         |
-| Doctor command             | Done    | Health checks for installation                                               |
-| Tests                      | Done    | 630+ unit tests, Docker-based E2E                                            |
-| Tools                      | Done    | `inference.ts` + `memory-search.ts`; MCP server exposes to Claude Code       |
-| Memory                     | Done    | Session summaries, continuous learning, search via CLI + MCP                 |
-| TUI                        | Planned | No interactive terminal UI yet                                               |
-| Session management         | Planned | No persistent sessions yet                                                   |
-| Slash commands             | Planned | No `/commit`, `/diff` style commands yet                                     |
-
 ## Getting Started
 
 ```bash
@@ -100,6 +76,7 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 ├── system/ → <repo>/defaults/system  # Symlink to framework (replaced on upgrade)
 │   ├── base-reasoning-framework.md   # Default reasoning framework
 │   ├── hooks/                # Event-driven automation
+│   ├── commands/             # Slash commands (markdown)
 │   ├── skills/               # Reusable playbooks (markdown)
 │   ├── tools/                # Deterministic operations
 │   └── agents/               # Specialized personas (markdown)
@@ -148,6 +125,10 @@ shaka uninstall               # Remove hooks and config
 shaka reload-hooks            # Re-discover hooks and regenerate provider configs
 shaka doctor                  # Check installation health
 shaka mcp serve               # Start MCP server (for Claude Code tool integration)
+shaka commands list            # Show all commands and status
+shaka commands new <name>     # Create a new command
+shaka commands disable <name> # Disable a command
+shaka commands enable <name>  # Re-enable a disabled command
 shaka memory search <query>   # Search session summaries and learnings
 shaka memory stats            # Show learnings count, exposures, and category breakdown
 shaka memory review           # Browse and manage learnings interactively
@@ -193,7 +174,7 @@ Shaka uses a **progressive abstraction model** where each layer builds on the pr
 │              │ Folder with SKILL.md + commands + context                │
 │              │ e.g., code-review/, deployment/                          │
 ├──────────────┼──────────────────────────────────────────────────────────┤
-│  COMMANDS    │ Single-purpose prompt + tool invocation        (planned) │
+│  COMMANDS    │ Single-purpose prompt + tool invocation                   │
 │              │ Slash-invoked, atomic operations                         │
 │              │ e.g., /commit, /diff, /lint                              │
 ├──────────────┼──────────────────────────────────────────────────────────┤
@@ -233,20 +214,58 @@ Tools are exposed to AI providers via:
 - **opencode**: Symlinked to `.opencode/tools/` (native)
 - **Claude Code**: Exposed via `shaka mcp serve` (MCP server)
 
-### Commands (Planned)
+### Commands
 
 Atomic, slash-invoked operations. A command does **one thing**: invoke tools, add a prompt, and let the model respond. Markdown with YAML frontmatter.
 
 ```markdown
 ---
-name: commit
 description: Create a git commit with AI-generated message
+subtask: false
+cwd:
+  - "*"
+providers:
+  claude:
+    model: sonnet
+  opencode:
+    model: openrouter/anthropic/claude-sonnet-4.6
 ---
 
 Check what changed in the working tree, then generate a conventional commit message.
+
+$ARGUMENTS
 ```
 
-Commands will be the primary user interface. Type `/commit` and it runs.
+**Frontmatter fields:**
+
+| Field            | Required | Description                                                                 |
+| ---------------- | -------- | --------------------------------------------------------------------------- |
+| `description`    | Yes      | Short description shown in the slash menu                                   |
+| `argument-hint`  | No       | Hint shown after command name (e.g., `[branch\|#pr]`)                       |
+| `subtask`        | No       | Run as background subagent (`true`) or inline (`false`, default)            |
+| `model`          | No       | Override the default model                                                  |
+| `user-invocable` | No       | Show in slash menu (`true`, default) or hide for internal use (`false`)     |
+| `cwd`            | No       | Project paths for scoped installation. `["*"]` = global (same as omitting)  |
+| `providers`      | No       | Per-provider field overrides (e.g., different `model` for claude/opencode)  |
+
+**Body substitutions:** `$ARGUMENTS` (all args), `$1`/`$2`/... (positional), `` !`cmd` `` (shell output).
+
+Commands are the primary user interface. Type `/code-review` and it runs.
+
+**Shipped commands:**
+
+| Command       | Purpose                                             |
+| ------------- | --------------------------------------------------- |
+| `code-review` | Review local changes, a branch, or a PR             |
+
+Commands live in `system/commands/` (shipped) and `customizations/commands/` (user). Customizations override system commands by filename match.
+
+```bash
+shaka commands list              # Show all commands and status
+shaka commands new <name>        # Create a new command
+shaka commands disable <name>    # Disable a command
+shaka commands enable <name>     # Re-enable a disabled command
+```
 
 ### Skills
 
@@ -261,12 +280,6 @@ Domain containers for complex workflows. A skill is a **folder** with a `SKILL.m
 | RedTeam         | Adversarial validation (32 agents)            |
 | Science         | Scientific method workflows                   |
 | FirstPrinciples | Deconstruct → Challenge → Reconstruct         |
-
-```text
-skills/code-review/
-├── SKILL.md              # Workflow definition and domain knowledge
-└── security-rules.md     # Optional supporting context
-```
 
 Skills are invoked by context ("review this PR") or explicitly ("use the code-review skill").
 
@@ -374,7 +387,6 @@ These are ideas for future development, not yet implemented:
 
 - **Interactive TUI** — `shaka` as a standalone terminal interface
 - **Session management** — Persistent sessions across CLI invocations (`shaka start`, `shaka resume`, `shaka sessions`)
-- **Slash commands** — `/commit`, `/diff`, `/lint` style atomic operations
 - **Single-shot CLI** — `shaka run "summarize this file"`, `shaka skill list`, `shaka tool run`
 - **Feature polyfills** — Subagent events and background subagents for opencode
 
