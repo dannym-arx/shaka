@@ -39,6 +39,9 @@ export interface ShakaConfig {
     readonly recency_window_days?: number;
     readonly search_max_results?: number;
   };
+  readonly commands?: {
+    readonly disabled?: string[];
+  };
 }
 
 export function validateConfig(config: unknown): Result<ShakaConfig, Error> {

@@ -104,6 +104,7 @@ export class InitService {
       join(this.shakaHome, "user"),
       join(this.shakaHome, "memory"),
       join(this.shakaHome, "customizations"),
+      join(this.shakaHome, "customizations", "commands"),
     ];
 
     for (const dir of directories) {

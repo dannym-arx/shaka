@@ -15,8 +15,9 @@ import {
   loadConfig,
   resolveShakaHome,
 } from "../domain/config";
+import { installCommandsForProviders } from "../providers/command-orchestrator";
 import { createProvider } from "../providers/registry";
-import type { ProviderName } from "../providers/types";
+import type { ProviderConfigurer, ProviderName } from "../providers/types";
 
 async function reloadProviders(shakaHome: string): Promise<void> {
   // Backfill missing config fields (e.g., permissions added in v0.4.0)
@@ -28,11 +29,11 @@ async function reloadProviders(shakaHome: string): Promise<void> {
     process.exit(1);
   }
 
-  const providers: ProviderName[] = [];
-  if (config.providers.claude.enabled) providers.push("claude");
-  if (config.providers.opencode.enabled) providers.push("opencode");
+  const providerNames: ProviderName[] = [];
+  if (config.providers.claude.enabled) providerNames.push("claude");
+  if (config.providers.opencode.enabled) providerNames.push("opencode");
 
-  if (providers.length === 0) {
+  if (providerNames.length === 0) {
     console.error("ERROR: No providers enabled in config. Run `shaka init` first.");
     process.exit(1);
   }
@@ -41,14 +42,20 @@ async function reloadProviders(shakaHome: string): Promise<void> {
 
   const permissionMode = isPermissionsManaged(config) ? undefined : "skip";
 
-  for (const providerName of providers) {
+  const installedProviders: ProviderConfigurer[] = [];
+  for (const providerName of providerNames) {
     const provider = createProvider(providerName);
     const result = await provider.install({ shakaHome, permissionMode });
     if (!result.ok) {
       console.error(`  ✗ Failed to reload ${providerName}: ${result.error.message}`);
     } else {
       console.log(`  ✓ Reloaded ${providerName} configuration`);
+      installedProviders.push(provider);
     }
+  }
+
+  if (installedProviders.length > 0) {
+    await installCommandsForProviders(shakaHome, installedProviders);
   }
 
   console.log("\nDone. Restart your provider session to pick up changes.");

@@ -88,6 +88,76 @@ else
   exit 1
 fi
 
+# ── Commands ──────────────────────────────────────────────────────────
+
+section "Commands"
+
+SHAKA_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/shaka"
+OC_COMMANDS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode/commands"
+MANIFEST="$SHAKA_HOME/commands-manifest.json"
+
+# Bundled code-review command installed
+if [ -f "$OC_COMMANDS_DIR/code-review.md" ]; then
+  pass "code-review command installed at $OC_COMMANDS_DIR/code-review.md"
+else
+  fail "code-review command not found"
+  ls -laR "$OC_COMMANDS_DIR" 2>&1 || true
+  exit 1
+fi
+
+# Compiled command contains frontmatter (description)
+if grep -q "description:" "$OC_COMMANDS_DIR/code-review.md"; then
+  pass "code-review.md contains frontmatter"
+else
+  fail "code-review.md missing frontmatter"
+  head -5 "$OC_COMMANDS_DIR/code-review.md"
+  exit 1
+fi
+
+# Opencode commands should NOT have user-invocable (Claude-only field)
+if grep -qi "user-invocable" "$OC_COMMANDS_DIR/code-review.md"; then
+  fail "code-review.md has user-invocable (Claude-only field leaked to opencode)"
+  head -10 "$OC_COMMANDS_DIR/code-review.md"
+  exit 1
+else
+  pass "code-review.md correctly omits user-invocable field"
+fi
+
+# Manifest exists and tracks code-review
+if [ -f "$MANIFEST" ]; then
+  pass "commands-manifest.json exists"
+else
+  fail "commands-manifest.json not found"
+  exit 1
+fi
+
+if jq -e '.global | index("code-review")' "$MANIFEST" >/dev/null 2>&1; then
+  pass "manifest tracks code-review"
+else
+  fail "manifest does not contain code-review"
+  cat "$MANIFEST"
+  exit 1
+fi
+
+# shaka commands list shows the command
+LIST_OUTPUT=$(shaka commands list 2>&1)
+
+if echo "$LIST_OUTPUT" | grep -q "code-review"; then
+  pass "shaka commands list shows code-review"
+else
+  fail "shaka commands list does not show code-review"
+  echo "$LIST_OUTPUT"
+  exit 1
+fi
+
+if echo "$LIST_OUTPUT" | grep "code-review" | grep -q "installed"; then
+  pass "code-review shows as installed"
+else
+  fail "code-review not showing installed status"
+  echo "$LIST_OUTPUT"
+  exit 1
+fi
+
 # ── Session start hook ────────────────────────────────────────────────
 
 section "Session start hook"
@@ -179,8 +249,6 @@ fi
 
 section "Uninstall"
 
-SHAKA_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/shaka"
-
 # Verify things exist before uninstall
 if [ -f "$PLUGIN" ]; then
   pass "shaka.ts plugin exists before uninstall"
@@ -237,6 +305,21 @@ if [ -d "$SHAKA_HOME/user" ]; then
 else
   fail "user/ was deleted despite --keep-data"
   exit 1
+fi
+
+# Commands cleaned up
+if [ -f "$OC_COMMANDS_DIR/code-review.md" ]; then
+  fail "code-review.md still exists after uninstall"
+  exit 1
+else
+  pass "code-review command removed"
+fi
+
+if [ -f "$MANIFEST" ]; then
+  fail "commands-manifest.json still exists after uninstall"
+  exit 1
+else
+  pass "commands-manifest.json removed"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────

@@ -165,6 +165,76 @@ else
   exit 1
 fi
 
+# ── Commands ──────────────────────────────────────────────────────────
+
+section "Commands"
+
+SHAKA_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/shaka"
+SKILLS_DIR="$HOME/.claude/skills"
+MANIFEST="$SHAKA_HOME/commands-manifest.json"
+
+# Bundled code-review skill installed
+if [ -f "$SKILLS_DIR/code-review/SKILL.md" ]; then
+  pass "code-review skill installed at $SKILLS_DIR/code-review/SKILL.md"
+else
+  fail "code-review skill not found"
+  ls -laR "$SKILLS_DIR" 2>&1 || true
+  exit 1
+fi
+
+# SKILL.md contains compiled frontmatter (description)
+if grep -q "description:" "$SKILLS_DIR/code-review/SKILL.md"; then
+  pass "code-review SKILL.md contains frontmatter"
+else
+  fail "code-review SKILL.md missing frontmatter"
+  head -5 "$SKILLS_DIR/code-review/SKILL.md"
+  exit 1
+fi
+
+# SKILL.md has user-invocable (Claude-specific field)
+if grep -qi "user-invocable" "$SKILLS_DIR/code-review/SKILL.md"; then
+  pass "code-review SKILL.md has user-invocable field"
+else
+  fail "code-review SKILL.md missing user-invocable field"
+  head -10 "$SKILLS_DIR/code-review/SKILL.md"
+  exit 1
+fi
+
+# Manifest exists and tracks code-review
+if [ -f "$MANIFEST" ]; then
+  pass "commands-manifest.json exists"
+else
+  fail "commands-manifest.json not found"
+  exit 1
+fi
+
+if jq -e '.global | index("code-review")' "$MANIFEST" >/dev/null 2>&1; then
+  pass "manifest tracks code-review"
+else
+  fail "manifest does not contain code-review"
+  cat "$MANIFEST"
+  exit 1
+fi
+
+# shaka commands list shows the command
+LIST_OUTPUT=$(shaka commands list 2>&1)
+
+if echo "$LIST_OUTPUT" | grep -q "code-review"; then
+  pass "shaka commands list shows code-review"
+else
+  fail "shaka commands list does not show code-review"
+  echo "$LIST_OUTPUT"
+  exit 1
+fi
+
+if echo "$LIST_OUTPUT" | grep "code-review" | grep -q "installed"; then
+  pass "code-review shows as installed"
+else
+  fail "code-review not showing installed status"
+  echo "$LIST_OUTPUT"
+  exit 1
+fi
+
 # ── Session start hook (requires auth) ────────────────────────────────
 
 section "Session start hook"
@@ -294,8 +364,6 @@ fi
 
 section "Uninstall"
 
-SHAKA_HOME="${XDG_CONFIG_HOME:-$HOME/.config}/shaka"
-
 # Verify things exist before uninstall
 if [ -L "$SHAKA_HOME/system" ]; then
   pass "system/ symlink exists before uninstall"
@@ -367,6 +435,21 @@ if [ -d "$SHAKA_HOME/user" ]; then
 else
   fail "user/ was deleted despite --keep-data"
   exit 1
+fi
+
+# Commands cleaned up
+if [ -d "$SKILLS_DIR/code-review" ]; then
+  fail "code-review skill still exists after uninstall"
+  exit 1
+else
+  pass "code-review skill removed"
+fi
+
+if [ -f "$MANIFEST" ]; then
+  fail "commands-manifest.json still exists after uninstall"
+  exit 1
+else
+  pass "commands-manifest.json removed"
 fi
 
 # ── Summary ───────────────────────────────────────────────────────────

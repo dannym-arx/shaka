@@ -12,14 +12,19 @@
  * The generated plugin calls hooks via subprocess to maintain compatibility.
  */
 
-import { mkdir, unlink } from "node:fs/promises";
+import { mkdir, rm, stat, unlink } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { loadConfig } from "../../domain/config";
 import { type Result, err, ok } from "../../domain/result";
 import { installAssetSymlink, uninstallAssetSymlink, verifyAssetSymlink } from "../asset-installer";
+import { compileForOpencode } from "../command-compiler";
+import { type DiscoveredCommand, discoverCommands } from "../command-discovery";
+import { type CommandManifest, readManifest } from "../command-manifest";
 import { type DiscoveredHook, discoverAllHooks } from "../hook-discovery";
 import { OPENCODE_PERMISSION_DEFAULTS, hasExistingOpencodePermissions } from "../permissions";
 import type {
+  CommandInstallConfig,
   InstallConfig,
   InstallationStatus,
   PermissionMode,
@@ -141,6 +146,9 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
         join(this.opencodeConfigDir, "skills"),
       );
 
+      // Remove commands
+      await this.uninstallCommands(config);
+
       return ok(undefined);
     } catch (e) {
       return err(e instanceof Error ? e : new Error(String(e)));
@@ -159,8 +167,9 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
       join(this.opencodeConfigDir, "skills"),
       "skills",
     );
+    const commands = await this.checkCommands(config);
 
-    return { hooks, agents, skills };
+    return { hooks, agents, skills, commands };
   }
 
   private async checkHooks(): Promise<{ ok: boolean; issue?: string }> {
@@ -488,5 +497,122 @@ ${
   };
 };
 `;
+  }
+
+  async installCommands(config: CommandInstallConfig): Promise<void> {
+    const { commands, manifest } = config;
+    const globalCommandsDir = join(this.opencodeConfigDir, "commands");
+    await mkdir(globalCommandsDir, { recursive: true });
+
+    // Clean previous global commands
+    for (const name of manifest.global) {
+      await rm(join(globalCommandsDir, `${name}.md`), { force: true });
+    }
+    // Clean previous scoped commands
+    for (const [cwdPath, names] of Object.entries(manifest.scoped)) {
+      for (const name of names) {
+        await rm(join(cwdPath, ".opencode", "commands", `${name}.md`), { force: true });
+      }
+    }
+
+    const manifestGlobalSet = new Set(manifest.global);
+
+    for (const cmd of commands) {
+      if (cmd.cwd) {
+        await this.installScopedCommand(cmd, manifest);
+      } else {
+        await this.installGlobalCommand(cmd, globalCommandsDir, manifestGlobalSet);
+      }
+    }
+  }
+
+  private async installGlobalCommand(
+    cmd: DiscoveredCommand,
+    commandsDir: string,
+    manifestSet: Set<string>,
+  ): Promise<void> {
+    const targetPath = join(commandsDir, `${cmd.name}.md`);
+    if (!manifestSet.has(cmd.name) && (await Bun.file(targetPath).exists())) {
+      console.error(
+        `  ⚠ Skipped "${cmd.name}" — pre-existing command found at ${targetPath}\n    To let Shaka manage it, remove the existing command first, then run shaka reload.`,
+      );
+      return;
+    }
+
+    const compiled = compileForOpencode(cmd, commandsDir);
+    await Bun.write(compiled.path, compiled.content);
+  }
+
+  private async installScopedCommand(
+    cmd: DiscoveredCommand,
+    manifest: CommandManifest,
+  ): Promise<void> {
+    for (const cwdPath of cmd.cwd ?? []) {
+      const dirExists = await stat(cwdPath)
+        .then((s) => s.isDirectory())
+        .catch(() => false);
+      if (!dirExists) {
+        console.error(`  ⚠ Skipped "${cmd.name}" at ${cwdPath} — directory does not exist`);
+        continue;
+      }
+
+      const commandsDir = join(cwdPath, ".opencode", "commands");
+      const targetPath = join(commandsDir, `${cmd.name}.md`);
+      const previousScoped = new Set(manifest.scoped[cwdPath] ?? []);
+
+      if (!previousScoped.has(cmd.name) && (await Bun.file(targetPath).exists())) {
+        console.error(
+          `  ⚠ Skipped "${cmd.name}" — pre-existing command found at ${targetPath}\n    To let Shaka manage it, remove the existing command first, then run shaka reload.`,
+        );
+        continue;
+      }
+
+      const compiled = compileForOpencode(cmd, commandsDir);
+      await mkdir(commandsDir, { recursive: true });
+      await Bun.write(compiled.path, compiled.content);
+
+      console.log(`  ℹ Installed "${cmd.name}" to ${targetPath}`);
+      console.log(
+        `    These are generated files. Consider adding .opencode/commands/${cmd.name}.md to .gitignore`,
+      );
+    }
+  }
+
+  private async uninstallCommands(config: InstallConfig): Promise<void> {
+    const commandsDir = join(this.opencodeConfigDir, "commands");
+    const manifest = await readManifest(config.shakaHome);
+
+    for (const name of manifest.global) {
+      await rm(join(commandsDir, `${name}.md`), { force: true });
+    }
+    for (const [cwdPath, names] of Object.entries(manifest.scoped)) {
+      for (const name of names) {
+        await rm(join(cwdPath, ".opencode", "commands", `${name}.md`), { force: true });
+      }
+    }
+  }
+
+  private async checkCommands(config: InstallConfig): Promise<{ ok: boolean; issue?: string }> {
+    const manifest = await readManifest(config.shakaHome);
+    const shakaConfig = await loadConfig(config.shakaHome);
+    const { commands } = await discoverCommands(config.shakaHome, shakaConfig?.commands?.disabled);
+
+    const isEmpty =
+      commands.length === 0 &&
+      manifest.global.length === 0 &&
+      Object.keys(manifest.scoped).length === 0;
+    if (isEmpty) return { ok: true };
+
+    // Scoped commands are excluded — their target directories may not exist yet
+    const manifestGlobal = new Set(manifest.global);
+    const missing = commands.filter((c) => !c.cwd && !manifestGlobal.has(c.name));
+    if (missing.length > 0) {
+      return {
+        ok: false,
+        issue: `${missing.length} command(s) not installed (run shaka reload)`,
+      };
+    }
+
+    return { ok: true };
   }
 }
