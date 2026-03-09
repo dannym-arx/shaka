@@ -34,17 +34,22 @@ export async function removeSkill(
     return err(new Error(`Skill "${name}" is not installed.`));
   }
 
-  // Unlink from providers before removing source directory
-  await unlinkSkillFromProviders(shakaHome, name);
-
-  // Remove directory
-  const skillDir = join(shakaHome, "skills", name);
-  await rm(skillDir, { recursive: true, force: true });
-
   // Update manifest
   const updatedManifest = removeFromManifest(manifestResult.value, name);
   const saveResult = await saveManifest(shakaHome, updatedManifest);
   if (!saveResult.ok) return saveResult;
+
+  try {
+    // Unlink from providers before removing source directory
+    await unlinkSkillFromProviders(shakaHome, name);
+
+    // Remove directory
+    const skillDir = join(shakaHome, "skills", name);
+    await rm(skillDir, { recursive: true, force: true });
+  } catch (e) {
+    await saveManifest(shakaHome, manifestResult.value);
+    return err(e instanceof Error ? e : new Error(String(e)));
+  }
 
   return ok(skill);
 }

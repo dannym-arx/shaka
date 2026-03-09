@@ -16,20 +16,31 @@ interface ProviderSkillDir {
   skillsDir: string;
 }
 
+function getAllProviderSkillDirs(env: NodeJS.ProcessEnv = process.env): ProviderSkillDir[] {
+  const dirs: ProviderSkillDir[] = [];
+
+  dirs.push({ skillsDir: join(homedir(), ".claude", "skills") });
+
+  const xdg = env.XDG_CONFIG_HOME;
+  const base = xdg ? join(xdg, "opencode") : join(homedir(), ".config", "opencode");
+  dirs.push({ skillsDir: join(base, "skills") });
+
+  return dirs;
+}
+
 function getEnabledProviderSkillDirs(
   config: { providers: { claude: { enabled: boolean }; opencode: { enabled: boolean } } },
   env: NodeJS.ProcessEnv = process.env,
 ): ProviderSkillDir[] {
+  const allDirs = getAllProviderSkillDirs(env);
   const dirs: ProviderSkillDir[] = [];
 
   if (config.providers.claude.enabled) {
-    dirs.push({ skillsDir: join(homedir(), ".claude", "skills") });
+    dirs.push(allDirs[0] as ProviderSkillDir);
   }
 
   if (config.providers.opencode.enabled) {
-    const xdg = env.XDG_CONFIG_HOME;
-    const base = xdg ? join(xdg, "opencode") : join(homedir(), ".config", "opencode");
-    dirs.push({ skillsDir: join(base, "skills") });
+    dirs.push(allDirs[1] as ProviderSkillDir);
   }
 
   return dirs;
@@ -61,7 +72,7 @@ export async function unlinkSkillFromProviders(
   if (!config) return;
 
   const sourceDir = join(shakaHome, "skills", skillName);
-  for (const { skillsDir } of getEnabledProviderSkillDirs(config)) {
+  for (const { skillsDir } of getAllProviderSkillDirs()) {
     await uninstallAssetSymlink(sourceDir, skillsDir, skillName);
   }
 }

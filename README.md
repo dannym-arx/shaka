@@ -425,7 +425,7 @@ shaka skill install my-skill --clawdhub    # Legacy alias (deprecated)
 shaka skill install user/repo --yolo       # Skip security checks and prompt
 ```
 
-GitHub repos without a root `SKILL.md` are checked for `.claude-plugin/marketplace.json` — if found, available skills are listed for selection.
+GitHub repos without a root `SKILL.md` are discovered via fallback paths: marketplace metadata (`.claude-plugin/marketplace.json`), Claude layout (`.claude/skills/<name>/SKILL.md`), and plugin-style `skills/<name>/SKILL.md`.
 
 Installed skills live in `skills/` and are automatically symlinked to provider config directories. A security scan flags any executable files (`.ts`, `.js`, `.sh`, etc.) before installation — skills should be markdown-only.
 

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { InstalledSkill } from "../../../src/domain/skills-manifest";
 import { addSkill, emptyManifest, loadManifest, saveManifest } from "../../../src/domain/skills-manifest";
+import { linkSkillToProviders } from "../../../src/services/skill-linker";
 import { removeSkill } from "../../../src/services/skill-remove-service";
 
 const TEST_SKILL: InstalledSkill = {
@@ -16,15 +17,23 @@ const TEST_SKILL: InstalledSkill = {
 
 describe("SkillRemoveService", () => {
   let tempDir: string;
+  let originalXdgConfigHome: string | undefined;
+  let testXdgConfigHome: string;
 
   beforeEach(async () => {
+    originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
     tempDir = join(tmpdir(), `shaka-test-remove-${Date.now()}`);
+    testXdgConfigHome = join(tmpdir(), `shaka-test-remove-xdg-${Date.now()}`);
+    process.env.XDG_CONFIG_HOME = testXdgConfigHome;
     await mkdir(join(tempDir, "skills"), { recursive: true });
     await mkdir(join(tempDir, "system", "skills"), { recursive: true });
+    await mkdir(testXdgConfigHome, { recursive: true });
   });
 
   afterEach(async () => {
+    process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
     await rm(tempDir, { recursive: true, force: true });
+    await rm(testXdgConfigHome, { recursive: true, force: true });
   });
 
   async function installFakeSkill(name: string): Promise<void> {
@@ -36,6 +45,23 @@ describe("SkillRemoveService", () => {
     // Add to manifest
     const manifest = addSkill(emptyManifest(), name, TEST_SKILL);
     await saveManifest(tempDir, manifest);
+  }
+
+  async function writeConfig(enabled: { claude: boolean; opencode: boolean }): Promise<void> {
+    await writeFile(
+      join(tempDir, "config.json"),
+      JSON.stringify({
+        version: "1",
+        reasoning: { enabled: true },
+        permissions: { managed: true },
+        providers: {
+          claude: { enabled: enabled.claude },
+          opencode: { enabled: enabled.opencode },
+        },
+        assistant: { name: "Shaka" },
+        principal: { name: "User" },
+      }),
+    );
   }
 
   test("removes an installed skill", async () => {
@@ -111,5 +137,18 @@ describe("SkillRemoveService", () => {
       expect(updated.value.skills.SkillA).toBeUndefined();
       expect(updated.value.skills.SkillB).toBeDefined();
     }
+  });
+
+  test("removes provider symlink when removing skill", async () => {
+    await installFakeSkill("MySkill");
+    await writeConfig({ claude: false, opencode: true });
+
+    await linkSkillToProviders(tempDir, "MySkill");
+    const providerSkillDir = join(testXdgConfigHome, "opencode", "skills", "MySkill");
+    expect(await Bun.file(join(providerSkillDir, "SKILL.md")).exists()).toBe(true);
+
+    const result = await removeSkill(tempDir, "MySkill");
+    expect(result.ok).toBe(true);
+    expect(await Bun.file(providerSkillDir).exists()).toBe(false);
   });
 });

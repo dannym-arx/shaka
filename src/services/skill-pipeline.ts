@@ -6,7 +6,7 @@
  */
 
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { type Result, err, ok } from "../domain/result";
 import {
@@ -73,17 +73,41 @@ export async function validateSkillStructure(
     return err(new Error('SKILL.md must have a "name" field in frontmatter.'));
   }
 
-  return ok({ name: frontmatter.name.trim() });
+  const name = frontmatter.name.trim();
+  if (!isSafeSkillName(name)) {
+    return err(new Error('SKILL.md "name" must be a safe directory name.'));
+  }
+
+  return ok({ name });
 }
 
 // --- Internal helpers ---
 
 async function copySkillFiles(source: string, target: string): Promise<void> {
+  await mkdir(target, { recursive: true });
   const entries = await readdir(source, { withFileTypes: true });
   for (const entry of entries) {
     if (entry.name === ".git") continue;
-    await cp(join(source, entry.name), join(target, entry.name), { recursive: true });
+
+    const sourcePath = join(source, entry.name);
+    const targetPath = join(target, entry.name);
+
+    if (entry.isDirectory()) {
+      await copySkillFiles(sourcePath, targetPath);
+      continue;
+    }
+
+    await cp(sourcePath, targetPath, { recursive: false });
   }
+}
+
+function isSafeSkillName(name: string): boolean {
+  if (!name || name === "." || name === "..") return false;
+  if (name.includes("/") || name.includes("\\")) return false;
+  if (name.includes("\0")) return false;
+  if (isAbsolute(name)) return false;
+  if (/^[A-Za-z]:/.test(name)) return false;
+  return true;
 }
 
 function parseFrontmatter(content: string): Record<string, unknown> | null {

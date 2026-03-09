@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ok } from "../../../src/domain/result";
 import {
   type InstalledSkill,
@@ -49,7 +49,7 @@ function fakeGitCloneWithFiles(files: Record<string, string>) {
     await mkdir(dest, { recursive: true });
     for (const [path, content] of Object.entries(files)) {
       const fullPath = join(dest, path);
-      const dir = fullPath.slice(0, fullPath.lastIndexOf("/"));
+      const dir = dirname(fullPath);
       await mkdir(dir, { recursive: true });
       await writeFile(fullPath, content);
     }

@@ -5,8 +5,10 @@
  * appropriate provider and replaces the local copy.
  */
 
+import { cp, mkdir, rm } from "node:fs/promises";
+import { join } from "node:path";
 import { type Result, err, ok } from "../domain/result";
-import { loadManifest } from "../domain/skills-manifest";
+import { type InstalledSkill, loadManifest } from "../domain/skills-manifest";
 import { runSecurityChecks } from "./skill-install-service";
 import {
   cleanupTempDir,
@@ -44,15 +46,9 @@ export async function updateSkill(
     return err(new Error(`Skill "${name}" is not installed.`));
   }
 
-  // Resolve provider
-  let provider: SkillSourceProvider;
-  if (options.provider) {
-    provider = options.provider;
-  } else {
-    const providerResult = getProviderByName(skill.provider);
-    if (!providerResult.ok) return providerResult;
-    provider = providerResult.value;
-  }
+  const providerResult = resolveUpdateProvider(skill.provider, options);
+  if (!providerResult.ok) return providerResult;
+  const provider = providerResult.value;
 
   // Fetch latest from provider (passing stored subdirectory for update flow)
   const fetchResult = await provider.fetch(skill.source, { subdirectory: skill.subdirectory });
@@ -73,24 +69,17 @@ export async function updateSkill(
     const validation = await validateSkillStructure(fetchResult.value.skillDir);
     if (!validation.ok) return validation;
 
-    // Security checks (warn but don't block — user already trusts this source)
-    const report = await runSecurityChecks(fetchResult.value.skillDir);
-    const warnings: string[] = [];
-    if (!report.allPassed) {
-      for (const check of report.checks.filter((c) => !c.passed)) {
-        warnings.push(check.failureMessage);
-      }
-    }
+    const warnings = await collectUpdateWarnings(fetchResult.value.skillDir);
 
-    // Deploy and persist
-    await installSkillFiles(fetchResult.value.skillDir, shakaHome, name);
-
-    const persistResult = await persistToManifest(shakaHome, name, {
-      ...skill,
-      version: fetchResult.value.version,
-      installedAt: new Date().toISOString(),
-    });
-    if (!persistResult.ok) return persistResult;
+    const applyResult = await deployAndPersistUpdate(
+      shakaHome,
+      name,
+      skill,
+      fetchResult.value.version,
+      fetchResult.value.skillDir,
+      fetchResult.value.tempDir,
+    );
+    if (!applyResult.ok) return applyResult;
 
     return ok({
       name,
@@ -129,4 +118,97 @@ export async function updateAllSkills(
   }
 
   return ok({ results, failures });
+}
+
+function resolveUpdateProvider(
+  providerName: string,
+  options: UpdateOptions,
+): Result<SkillSourceProvider, Error> {
+  if (options.provider) {
+    return ok(options.provider);
+  }
+  return getProviderByName(providerName);
+}
+
+async function collectUpdateWarnings(skillDir: string): Promise<string[]> {
+  // Security checks (warn but don't block — user already trusts this source)
+  const report = await runSecurityChecks(skillDir);
+  if (report.allPassed) return [];
+
+  return report.checks.filter((check) => !check.passed).map((check) => check.failureMessage);
+}
+
+async function deployAndPersistUpdate(
+  shakaHome: string,
+  name: string,
+  skill: InstalledSkill,
+  version: string,
+  skillDir: string,
+  tempDir: string,
+): Promise<Result<void, Error>> {
+  const backupResult = await backupCurrentSkill(shakaHome, name, tempDir);
+  if (!backupResult.ok) return backupResult;
+
+  const deployResult = await deploySkillVersion(shakaHome, name, skillDir);
+  if (!deployResult.ok) {
+    await restoreBackupSkill(shakaHome, name, backupResult.value);
+    return deployResult;
+  }
+
+  const persistResult = await persistToManifest(shakaHome, name, {
+    ...skill,
+    version,
+    installedAt: new Date().toISOString(),
+  });
+  if (!persistResult.ok) {
+    await restoreBackupSkill(shakaHome, name, backupResult.value);
+    return persistResult;
+  }
+
+  return ok(undefined);
+}
+
+async function deploySkillVersion(
+  shakaHome: string,
+  name: string,
+  skillDir: string,
+): Promise<Result<void, Error>> {
+  try {
+    await installSkillFiles(skillDir, shakaHome, name);
+    return ok(undefined);
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)));
+  }
+}
+
+async function backupCurrentSkill(
+  shakaHome: string,
+  name: string,
+  tempDir: string,
+): Promise<Result<string | null, Error>> {
+  const currentDir = join(shakaHome, "skills", name);
+  const exists = await Bun.file(join(currentDir, "SKILL.md")).exists();
+  if (!exists) return ok(null);
+
+  const backupDir = join(tempDir, "_backup", name);
+  try {
+    await mkdir(join(tempDir, "_backup"), { recursive: true });
+    await cp(currentDir, backupDir, { recursive: true });
+    return ok(backupDir);
+  } catch (e) {
+    return err(e instanceof Error ? e : new Error(String(e)));
+  }
+}
+
+async function restoreBackupSkill(
+  shakaHome: string,
+  name: string,
+  backupDir: string | null,
+): Promise<void> {
+  if (!backupDir) return;
+
+  const skillDir = join(shakaHome, "skills", name);
+  await rm(skillDir, { recursive: true, force: true }).catch(() => {});
+  await mkdir(join(shakaHome, "skills"), { recursive: true }).catch(() => {});
+  await cp(backupDir, skillDir, { recursive: true }).catch(() => {});
 }

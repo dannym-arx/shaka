@@ -11,7 +11,7 @@
 
 import { mkdir, readdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { parseGitHubUrl } from "../../domain/github-url";
 import { type Result, err, ok } from "../../domain/result";
 import { cleanupTempDir } from "../skill-pipeline";
@@ -51,7 +51,10 @@ export function createGitHubProvider(options: GitHubProviderOptions = {}): Skill
       const parsed = parseGitHubUrl(input);
       if (!parsed.ok) return parsed;
 
-      const tempDir = join(tmpdir(), `shaka-skill-${Date.now()}`);
+      const tempDir = join(
+        tmpdir(),
+        `shaka-skill-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      );
       await mkdir(tempDir, { recursive: true });
 
       const cloneFn = options.gitClone ?? defaultGitClone;
@@ -101,10 +104,21 @@ async function discoverSkillDir(
   source: string,
   options?: FetchOptions,
 ): Promise<Result<FetchResult, Error> | null> {
-  // Try SKILL.md at root or subdirectory
-  const skillDir = subdirectory ? join(tempDir, subdirectory) : tempDir;
-  if (await Bun.file(join(skillDir, "SKILL.md")).exists()) {
-    return ok({ skillDir, tempDir, version, source, subdirectory });
+  // Try explicit subdirectory first. If it misses, do not fall back to another skill.
+  if (subdirectory) {
+    const explicitSkillDir = resolveInsideRepo(tempDir, subdirectory);
+    if (!explicitSkillDir) {
+      return err(new Error(`Invalid skill subdirectory: ${subdirectory}`));
+    }
+    if (await Bun.file(join(explicitSkillDir, "SKILL.md")).exists()) {
+      return ok({ skillDir: explicitSkillDir, tempDir, version, source, subdirectory });
+    }
+    return null;
+  }
+
+  // Try SKILL.md at repo root
+  if (await Bun.file(join(tempDir, "SKILL.md")).exists()) {
+    return ok({ skillDir: tempDir, tempDir, version, source, subdirectory: null });
   }
 
   // Fallback: marketplace
@@ -180,7 +194,10 @@ async function resolvePluginSkillDir(
   const pluginPath = plugin.source.replace(/^\.\//, "");
 
   // Try the explicit source path
-  const skillDir = pluginPath ? join(tempDir, pluginPath) : tempDir;
+  const skillDir = pluginPath ? resolveInsideRepo(tempDir, pluginPath) : tempDir;
+  if (!skillDir) {
+    return err(new Error(`Invalid marketplace path: ${plugin.source}`));
+  }
   if (await Bun.file(join(skillDir, "SKILL.md")).exists()) {
     return ok({ skillDir, tempDir, version, source, subdirectory: pluginPath || null });
   }
@@ -244,7 +261,10 @@ async function resolveMarketplacePlugin(
   if (!plugin) return null;
 
   const pluginPath = plugin.source.replace(/^\.\//, "");
-  const skillDir = join(tempDir, pluginPath);
+  const skillDir = resolveInsideRepo(tempDir, pluginPath);
+  if (!skillDir) {
+    return err(new Error(`Invalid marketplace path: ${plugin.source}`));
+  }
 
   const exists = await Bun.file(join(skillDir, "SKILL.md")).exists();
   if (!exists) return null;
@@ -342,4 +362,13 @@ async function defaultGitRevParse(cwd: string): Promise<Result<string, Error>> {
       new Error(`Failed to get commit SHA: ${e instanceof Error ? e.message : String(e)}`),
     );
   }
+}
+
+function resolveInsideRepo(repoRoot: string, unsafePath: string): string | null {
+  const root = resolve(repoRoot);
+  const candidate = resolve(repoRoot, unsafePath);
+  if (candidate === root || candidate.startsWith(`${root}${sep}`)) {
+    return candidate;
+  }
+  return null;
 }

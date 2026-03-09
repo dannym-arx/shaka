@@ -75,6 +75,27 @@ async function handleInstall(
   const result = await installSkill(shakaHome, source, {
     yolo: opts.yolo,
     provider: providerOverride?.ok ? providerOverride.value : undefined,
+    selectSkill: async (skills) => {
+      if (skills.length === 0) return null;
+
+      console.log("\nMultiple skills found. Select one to install:");
+      for (const [index, skill] of skills.entries()) {
+        const details = skill.description ? ` - ${skill.description}` : "";
+        console.log(`  ${index + 1}) ${skill.name}${details}`);
+      }
+
+      process.stdout.write("Choose a skill number (or press Enter to cancel): ");
+      const answer = await readLine();
+      if (!answer || answer.toLowerCase() === "n") return null;
+
+      const selectedIndex = Number.parseInt(answer, 10);
+      if (Number.isNaN(selectedIndex) || selectedIndex < 1 || selectedIndex > skills.length) {
+        console.log("Invalid selection, installation cancelled.");
+        return null;
+      }
+
+      return skills[selectedIndex - 1]?.name ?? null;
+    },
     onSecurityCheck: async (report, skillName) => {
       console.log(formatSecurityReport(report));
 

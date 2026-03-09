@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ok } from "../../../../src/domain/result";
 import { createGitHubProvider } from "../../../../src/services/skill-source/github";
 
@@ -20,7 +20,7 @@ function fakeGitClone(files: Record<string, string>) {
     await mkdir(dest, { recursive: true });
     for (const [path, content] of Object.entries(files)) {
       const fullPath = join(dest, path);
-      const dir = fullPath.slice(0, fullPath.lastIndexOf("/"));
+      const dir = dirname(fullPath);
       await mkdir(dir, { recursive: true });
       await writeFile(fullPath, content);
     }
@@ -363,6 +363,56 @@ describe("GitHubSourceProvider", () => {
       if (result.ok) {
         expect(result.value.subdirectory).toBe("skills/my-skill");
         await rm(result.value.tempDir, { recursive: true, force: true });
+      }
+    });
+
+    test("does not fall back to other skills when explicit subdirectory is missing", async () => {
+      const provider = createGitHubProvider({
+        gitClone: fakeGitClone({ "skills/actual-skill/SKILL.md": VALID_SKILL_MD }),
+        gitRevParse: fakeRevParse,
+      });
+
+      const result = await provider.fetch("user/repo", {
+        subdirectory: "skills/missing-skill",
+      });
+
+      expect(result.ok).toBe(false);
+    });
+
+    test("rejects explicit subdirectory path traversal", async () => {
+      const provider = createGitHubProvider({
+        gitClone: fakeGitClone({ "SKILL.md": VALID_SKILL_MD }),
+        gitRevParse: fakeRevParse,
+      });
+
+      const result = await provider.fetch("user/repo", {
+        subdirectory: "../outside",
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("Invalid skill subdirectory");
+      }
+    });
+
+    test("rejects marketplace plugin source path traversal", async () => {
+      const marketplaceJson = JSON.stringify({
+        name: "malicious-marketplace",
+        plugins: [{ name: "pwn", source: "../outside" }],
+      });
+
+      const provider = createGitHubProvider({
+        gitClone: fakeGitClone({
+          ".claude-plugin/marketplace.json": marketplaceJson,
+        }),
+        gitRevParse: fakeRevParse,
+      });
+
+      const result = await provider.fetch("user/repo");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("Invalid marketplace path");
       }
     });
   });

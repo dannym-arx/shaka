@@ -53,20 +53,10 @@ export async function loadManifest(shakaHome: string): Promise<Result<SkillsMani
     }
 
     const raw = await file.json();
+    const validated = validateManifest(raw);
+    if (!validated.ok) return validated;
 
-    if (typeof raw !== "object" || raw === null) {
-      return err(new Error("Invalid skills manifest: expected object"));
-    }
-
-    if (raw.version !== MANIFEST_VERSION) {
-      return err(
-        new Error(
-          `Unsupported skills manifest version: ${raw.version} (expected ${MANIFEST_VERSION})`,
-        ),
-      );
-    }
-
-    return ok(raw as SkillsManifest);
+    return ok(validated.value);
   } catch (e) {
     return err(
       new Error(`Failed to read skills manifest: ${e instanceof Error ? e.message : String(e)}`),
@@ -104,4 +94,67 @@ export function addSkill(
 export function removeSkill(manifest: SkillsManifest, name: string): SkillsManifest {
   const { [name]: _, ...rest } = manifest.skills;
   return { ...manifest, skills: rest };
+}
+
+function validateManifest(raw: unknown): Result<SkillsManifest, Error> {
+  if (typeof raw !== "object" || raw === null) {
+    return err(new Error("Invalid skills manifest: expected object"));
+  }
+
+  const manifest = raw as Record<string, unknown>;
+  if (manifest.version !== MANIFEST_VERSION) {
+    return err(
+      new Error(
+        `Unsupported skills manifest version: ${manifest.version} (expected ${MANIFEST_VERSION})`,
+      ),
+    );
+  }
+
+  if (
+    typeof manifest.skills !== "object" ||
+    manifest.skills === null ||
+    Array.isArray(manifest.skills)
+  ) {
+    return err(new Error("Invalid skills manifest: expected skills object"));
+  }
+
+  const validatedSkills: Record<string, InstalledSkill> = {};
+  for (const [name, value] of Object.entries(manifest.skills as Record<string, unknown>)) {
+    const validatedSkill = validateInstalledSkill(name, value);
+    if (!validatedSkill.ok) return validatedSkill;
+    validatedSkills[name] = validatedSkill.value;
+  }
+
+  return ok({ version: MANIFEST_VERSION, skills: validatedSkills });
+}
+
+function validateInstalledSkill(name: string, value: unknown): Result<InstalledSkill, Error> {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    return err(new Error(`Invalid skills manifest: skill "${name}" must be an object`));
+  }
+
+  const skill = value as Record<string, unknown>;
+  if (typeof skill.source !== "string") {
+    return err(new Error(`Invalid skills manifest: skill "${name}" has invalid source`));
+  }
+  if (typeof skill.provider !== "string") {
+    return err(new Error(`Invalid skills manifest: skill "${name}" has invalid provider`));
+  }
+  if (typeof skill.version !== "string") {
+    return err(new Error(`Invalid skills manifest: skill "${name}" has invalid version`));
+  }
+  if (!(typeof skill.subdirectory === "string" || skill.subdirectory === null)) {
+    return err(new Error(`Invalid skills manifest: skill "${name}" has invalid subdirectory`));
+  }
+  if (typeof skill.installedAt !== "string") {
+    return err(new Error(`Invalid skills manifest: skill "${name}" has invalid installedAt`));
+  }
+
+  return ok({
+    source: skill.source,
+    provider: skill.provider,
+    version: skill.version,
+    subdirectory: skill.subdirectory,
+    installedAt: skill.installedAt,
+  });
 }

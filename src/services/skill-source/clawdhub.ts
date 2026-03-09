@@ -77,7 +77,10 @@ export function createClawhubProvider(options: ClawhubProviderOptions = {}): Ski
     async fetch(input: string): Promise<Result<FetchResult, Error>> {
       const { slug, version } = parseClawhubInput(input);
 
-      const tempDir = join(tmpdir(), `shaka-clawhub-${Date.now()}`);
+      const tempDir = join(
+        tmpdir(),
+        `shaka-clawhub-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+      );
       await mkdir(tempDir, { recursive: true });
 
       const result = await fetchSkillFn(slug, version, tempDir);

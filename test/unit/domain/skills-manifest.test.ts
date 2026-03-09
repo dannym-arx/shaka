@@ -105,6 +105,43 @@ describe("SkillsManifest", () => {
         expect(result.error.message).toContain("Invalid skills manifest");
       }
     });
+
+    test("returns error when skills field has invalid shape", async () => {
+      await Bun.write(
+        join(tempDir, "skills.json"),
+        JSON.stringify({ version: 1, skills: [] }),
+      );
+
+      const result = await loadManifest(tempDir);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("expected skills object");
+      }
+    });
+
+    test("returns error when installed skill entry has invalid field types", async () => {
+      await Bun.write(
+        join(tempDir, "skills.json"),
+        JSON.stringify({
+          version: 1,
+          skills: {
+            "my-skill": {
+              source: "user/repo",
+              provider: "github",
+              version: 123,
+              subdirectory: null,
+              installedAt: "2026-02-11T00:00:00.000Z",
+            },
+          },
+        }),
+      );
+
+      const result = await loadManifest(tempDir);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("invalid version");
+      }
+    });
   });
 
   describe("saveManifest", () => {

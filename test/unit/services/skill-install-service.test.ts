@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { ok } from "../../../src/domain/result";
 import { loadManifest } from "../../../src/domain/skills-manifest";
 import { validateSkillStructure } from "../../../src/services/skill-pipeline";
@@ -55,7 +55,7 @@ function fakeGitCloneWithFiles(files: Record<string, string>) {
     await mkdir(dest, { recursive: true });
     for (const [path, content] of Object.entries(files)) {
       const fullPath = join(dest, path);
-      const dir = fullPath.slice(0, fullPath.lastIndexOf("/"));
+      const dir = dirname(fullPath);
       await mkdir(dir, { recursive: true });
       await writeFile(fullPath, content);
     }
@@ -118,6 +118,21 @@ describe("SkillInstallService", () => {
 
       const skillMd = Bun.file(join(tempDir, "skills", "TestSkill", "SKILL.md"));
       expect(await skillMd.exists()).toBe(true);
+    });
+
+    test("does not copy nested .git directories into installed skills", async () => {
+      await installSkill(tempDir, "user/repo", {
+        provider: testProvider(
+          fakeGitCloneWithFiles({
+            "SKILL.md": VALID_SKILL_MD,
+            "nested/.git/config": "[core]\nrepositoryformatversion = 0",
+            "nested/notes.md": "hello",
+          }),
+        ),
+      });
+
+      expect(await Bun.file(join(tempDir, "skills", "TestSkill", "nested", ".git", "config")).exists()).toBe(false);
+      expect(await Bun.file(join(tempDir, "skills", "TestSkill", "nested", "notes.md")).exists()).toBe(true);
     });
 
     test("handles subdirectory in URL", async () => {
@@ -646,6 +661,36 @@ describe("SkillInstallService", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.message).toContain('"name" field');
+      }
+    });
+
+    test("rejects unsafe frontmatter name with path traversal", async () => {
+      const dir = join(tempDir, "unsafe-name");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, "SKILL.md"),
+        `---\nname: ../escape\ndescription: bad\n---\n\n# Escape\n`,
+      );
+
+      const result = await validateSkillStructure(dir);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("safe directory name");
+      }
+    });
+
+    test("rejects unsafe frontmatter name with separators", async () => {
+      const dir = join(tempDir, "unsafe-separators");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, "SKILL.md"),
+        `---\nname: nested/skill\ndescription: bad\n---\n\n# Nested\n`,
+      );
+
+      const result = await validateSkillStructure(dir);
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("safe directory name");
       }
     });
 
