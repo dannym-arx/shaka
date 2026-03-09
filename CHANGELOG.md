@@ -162,7 +162,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow 
   - `--github` and `--clawhub` flags to override auto-detection (`--clawdhub` kept as deprecated alias)
 - **Clawhub provider** — HTTP-based skill installation from the Clawhub registry with version resolution, ZIP download, and extraction
 - **GitHub marketplace fallback** — GitHub repos without a root `SKILL.md` are checked for `.claude-plugin/marketplace.json`; if found, available skills are listed for user selection
-- **SkillSourceProvider abstraction** — Provider interface and registry (`canHandle`, `fetch`, `resolveLatestVersion`) enabling pluggable skill sources
+- **SkillSourceProvider abstraction** — Provider interface and registry (`canHandle`, `fetch`) enabling pluggable skill sources
 - **Windows support** — Shaka now runs on Windows alongside macOS and Linux
   - Cross-platform path utilities (`src/platform/paths.ts`) with `readSymlinkTarget()` and `removeLink()` helpers
   - Junctions instead of directory symlinks for zero-privilege Windows support (no Developer Mode or admin required)

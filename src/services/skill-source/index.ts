@@ -6,9 +6,9 @@
  * clearProviders() before registering test-specific providers.
  */
 
-import { createClawhubProvider } from "./clawdhub";
+import { createClawhubProvider } from "./clawhub";
 import { createGitHubProvider } from "./github";
-import { registerProvider } from "./registry";
+import { getAllSourceProviders, registerProvider } from "./registry";
 
 let defaultsRegistered = false;
 
@@ -17,10 +17,17 @@ let defaultsRegistered = false;
  * Idempotent — safe to call multiple times.
  */
 export function registerDefaultProviders(): void {
-  if (defaultsRegistered) return;
+  const providers = getAllSourceProviders();
+  if (defaultsRegistered && providers.length > 0) return;
+
   // GitHub first (matches `/`, `https://`, `git@`), Clawhub catches bare words.
-  registerProvider(createGitHubProvider());
-  registerProvider(createClawhubProvider());
+  if (!providers.some((provider) => provider.name === "github")) {
+    registerProvider(createGitHubProvider());
+  }
+  if (!providers.some((provider) => provider.name === "clawhub")) {
+    registerProvider(createClawhubProvider());
+  }
+
   defaultsRegistered = true;
 }
 
@@ -33,10 +40,10 @@ export {
 export type { SkillSourceProvider, FetchResult, FetchOptions } from "./types";
 export { createGitHubProvider } from "./github";
 export type { GitHubProviderOptions, GitCloneFn, GitRevParseFn } from "./github";
-export { createClawhubProvider, createClawdhubProvider } from "./clawdhub";
+export { createClawhubProvider, createClawdhubProvider } from "./clawhub";
 export type {
   ClawhubProviderOptions,
   ClawhubFetchFn,
   ClawdhubProviderOptions,
   ClawdhubFetchFn,
-} from "./clawdhub";
+} from "./clawhub";

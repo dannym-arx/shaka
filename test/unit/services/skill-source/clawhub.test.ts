@@ -6,7 +6,7 @@ import { ok } from "../../../../src/domain/result";
 import {
   createClawhubProvider,
   parseClawhubInput,
-} from "../../../../src/services/skill-source/clawdhub";
+} from "../../../../src/services/skill-source/clawhub";
 
 const VALID_SKILL_MD = `---
 name: TestSkill
