@@ -38,6 +38,7 @@ describe("command-orchestrator", () => {
         hooks: { ok: true },
         agents: { ok: true },
         skills: { ok: true },
+        installedSkills: { ok: true },
         commands: { ok: true },
       }),
     };
