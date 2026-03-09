@@ -14,7 +14,6 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parseGitHubUrl } from "../../domain/github-url";
 import { type Result, err, ok } from "../../domain/result";
-import type { InstalledSkill } from "../../domain/skills-manifest";
 import { cleanupTempDir } from "../skill-pipeline";
 import type { FetchOptions, FetchResult, SkillSourceProvider } from "./types";
 
@@ -83,29 +82,6 @@ export function createGitHubProvider(options: GitHubProviderOptions = {}): Skill
 
       await cleanupTempDir(tempDir);
       return err(new Error("No SKILL.md or .claude-plugin/marketplace.json found in repository."));
-    },
-
-    async resolveLatestVersion(skill: InstalledSkill): Promise<Result<string, Error>> {
-      const parsed = parseGitHubUrl(skill.source);
-      if (!parsed.ok) {
-        return err(
-          new Error(`Invalid stored source for "${skill.source}": ${parsed.error.message}`),
-        );
-      }
-
-      const tempDir = join(tmpdir(), `shaka-version-${Date.now()}`);
-      await mkdir(tempDir, { recursive: true });
-
-      try {
-        const cloneFn = options.gitClone ?? defaultGitClone;
-        const cloneResult = await cloneFn(parsed.value.cloneUrl, tempDir, parsed.value.ref);
-        if (!cloneResult.ok) return cloneResult;
-
-        const revParseFn = options.gitRevParse ?? defaultGitRevParse;
-        return await revParseFn(tempDir);
-      } finally {
-        await cleanupTempDir(tempDir);
-      }
     },
   };
 }

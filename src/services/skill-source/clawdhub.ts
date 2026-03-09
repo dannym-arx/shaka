@@ -13,7 +13,6 @@ import { mkdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { type Result, err, ok } from "../../domain/result";
-import type { InstalledSkill } from "../../domain/skills-manifest";
 import { cleanupTempDir } from "../skill-pipeline";
 import type { FetchResult, SkillSourceProvider } from "./types";
 
@@ -35,18 +34,11 @@ export type ClawdhubFetchFn = (
   destDir: string,
 ) => Promise<Result<{ version: string }, Error>>;
 
-/**
- * Resolves the latest version for a slug.
- */
-export type ClawdhubResolveFn = (slug: string) => Promise<Result<string, Error>>;
-
 export interface ClawdhubProviderOptions {
   /** Override the registry URL (default: https://clawhub.ai, env: CLAWHUB_REGISTRY). */
   registryUrl?: string;
   /** Override fetch+extract for testing. */
   fetchSkill?: ClawdhubFetchFn;
-  /** Override version resolution for testing. */
-  resolveLatest?: ClawdhubResolveFn;
 }
 
 /** Parse a Clawdhub input string into slug and optional version. */
@@ -68,7 +60,6 @@ export function parseClawdhubInput(input: string): ClawdhubInput {
 export function createClawdhubProvider(options: ClawdhubProviderOptions = {}): SkillSourceProvider {
   const registryUrl = options.registryUrl ?? process.env.CLAWHUB_REGISTRY ?? DEFAULT_REGISTRY;
   const fetchSkillFn = options.fetchSkill ?? createDefaultFetchSkill(registryUrl);
-  const resolveLatestFn = options.resolveLatest ?? createDefaultResolveLatest(registryUrl);
 
   return {
     name: "clawdhub",
@@ -100,10 +91,6 @@ export function createClawdhubProvider(options: ClawdhubProviderOptions = {}): S
         source: slug,
         subdirectory: null,
       });
-    },
-
-    async resolveLatestVersion(skill: InstalledSkill): Promise<Result<string, Error>> {
-      return resolveLatestFn(skill.source);
     },
   };
 }
@@ -149,22 +136,6 @@ function createDefaultFetchSkill(registryUrl: string): ClawdhubFetchFn {
     }
 
     return ok({ version: resolvedVersion });
-  };
-}
-
-function createDefaultResolveLatest(registryUrl: string): ClawdhubResolveFn {
-  return async (slug) => {
-    const url = `${registryUrl}/api/v1/skills/${encodeURIComponent(slug)}`;
-    const res = await safeFetch(url);
-    if (!res.ok) return res;
-
-    const body = (await res.value.json()) as {
-      latestVersion: { version: string } | null;
-    };
-    if (!body.latestVersion) {
-      return err(new Error(`No published version found for "${slug}"`));
-    }
-    return ok(body.latestVersion.version);
   };
 }
 

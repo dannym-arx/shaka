@@ -133,12 +133,16 @@ async function handleUpdate(name?: string): Promise<void> {
       console.error(`✗ ${result.error.message}`);
       process.exit(1);
     }
-    if (result.value.length === 0) {
+    const { results, failures } = result.value;
+    if (results.length === 0 && failures.length === 0) {
       console.log("No installed skills to update.");
       return;
     }
-    for (const r of result.value) {
+    for (const r of results) {
       printUpdateResult(r);
+    }
+    for (const f of failures) {
+      console.error(`  ✗ "${f.name}": ${f.error.message}`);
     }
   }
 }

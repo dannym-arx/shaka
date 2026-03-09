@@ -17,7 +17,6 @@ function makeProvider(
     name,
     canHandle,
     fetch: async () => ok({ skillDir: "", tempDir: "", version: "", source: "", subdirectory: null }),
-    resolveLatestVersion: async () => ok(""),
   };
 }
 

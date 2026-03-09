@@ -155,73 +155,6 @@ export async function scanForExecutableContent(skillPath: string): Promise<ScanR
 // --- Security checks ---
 
 /**
- * Run all security checks on a skill directory.
- */
-export async function runSecurityChecks(skillPath: string): Promise<SecurityReport> {
-  const checks = await Promise.all([
-    checkExecutables(skillPath),
-    checkUrls(skillPath),
-    checkHtmlComments(skillPath),
-    checkInvisibleChars(skillPath),
-  ]);
-  return {
-    checks,
-    allPassed: checks.every((c) => c.passed),
-  };
-}
-
-async function checkExecutables(skillPath: string): Promise<SecurityCheckEntry> {
-  const scan = await scanForExecutableContent(skillPath);
-  const hasRisky = scan.executable.length > 0 || scan.unknown.length > 0;
-  return {
-    emoji: "\u{1F3C3}",
-    label: "No executables",
-    passed: !hasRisky,
-    details: [...scan.executable, ...scan.unknown],
-    failureMessage: "Skill contains executable files, make sure to review it properly.",
-  };
-}
-
-async function checkUrls(skillPath: string): Promise<SecurityCheckEntry> {
-  const files = await collectFiles(skillPath);
-  const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
-  const flagged: string[] = [];
-  const pattern = /https?:\/\//;
-  for (const file of mdFiles) {
-    const content = await Bun.file(join(skillPath, file)).text();
-    if (pattern.test(content)) {
-      flagged.push(file);
-    }
-  }
-  return {
-    emoji: "\u{1F517}",
-    label: "No URLs",
-    passed: flagged.length === 0,
-    details: flagged,
-    failureMessage: "Skill contains URLs in markdown, make sure to review it properly.",
-  };
-}
-
-async function checkHtmlComments(skillPath: string): Promise<SecurityCheckEntry> {
-  const files = await collectFiles(skillPath);
-  const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
-  const flagged: string[] = [];
-  for (const file of mdFiles) {
-    const content = await Bun.file(join(skillPath, file)).text();
-    if (content.includes("<!--")) {
-      flagged.push(file);
-    }
-  }
-  return {
-    emoji: "\u{1F977}",
-    label: "No html comments",
-    passed: flagged.length === 0,
-    details: flagged,
-    failureMessage: "Skill has HTML comments in markdown, make sure to review it properly.",
-  };
-}
-
-/**
  * Zero-width and bidirectional override characters that can hide content.
  * Note: U+200C (ZWNJ) and U+200D (ZWJ) are excluded because they have
  * legitimate uses in non-Latin scripts (Arabic, Hindi, etc.).
@@ -229,23 +162,83 @@ async function checkHtmlComments(skillPath: string): Promise<SecurityCheckEntry>
 const INVISIBLE_CHARS =
   /[\u200B\u200E\u200F\u2028\u2029\u2060\u2066\u2067\u2068\u2069\u206A-\u206F\uFEFF\u00AD]/;
 
-async function checkInvisibleChars(skillPath: string): Promise<SecurityCheckEntry> {
-  const files = await collectFiles(skillPath);
-  const mdFiles = files.filter((f) => f.toLowerCase().endsWith(".md"));
-  const flagged: string[] = [];
-  for (const file of mdFiles) {
-    const content = await Bun.file(join(skillPath, file)).text();
-    if (INVISIBLE_CHARS.test(content)) {
-      flagged.push(file);
+/**
+ * Run all security checks on a skill directory.
+ * Single-pass: collects the file list once and reads each .md file once.
+ */
+export async function runSecurityChecks(skillPath: string): Promise<SecurityReport> {
+  const allFiles = await collectFiles(skillPath);
+
+  // Read all .md files once
+  const mdContents = new Map<string, string>();
+  for (const file of allFiles) {
+    if (file.toLowerCase().endsWith(".md")) {
+      mdContents.set(file, await Bun.file(join(skillPath, file)).text());
+    }
+  }
+
+  const checks = [checkExecutablesFromList(allFiles), ...runContentChecks(mdContents)];
+
+  return {
+    checks,
+    allPassed: checks.every((c) => c.passed),
+  };
+}
+
+/** Check file list for executable or unknown extensions. */
+function checkExecutablesFromList(files: string[]): SecurityCheckEntry {
+  const risky: string[] = [];
+  for (const relativePath of files) {
+    const ext = extname(relativePath).toLowerCase();
+    if (ext !== "" && !SAFE_EXTENSIONS.has(ext)) {
+      risky.push(relativePath);
     }
   }
   return {
-    emoji: "\u{1F47B}",
-    label: "No invisible chars",
-    passed: flagged.length === 0,
-    details: flagged,
-    failureMessage: "Skill contains invisible unicode characters, make sure to review it properly.",
+    emoji: "\u{1F3C3}",
+    label: "No executables",
+    passed: risky.length === 0,
+    details: risky,
+    failureMessage: "Skill contains executable files, make sure to review it properly.",
   };
+}
+
+/** Check pre-read .md content for URLs, HTML comments, and invisible chars. */
+function runContentChecks(mdContents: Map<string, string>): SecurityCheckEntry[] {
+  const urlFlagged: string[] = [];
+  const htmlFlagged: string[] = [];
+  const invisibleFlagged: string[] = [];
+
+  for (const [file, content] of mdContents) {
+    if (/https?:\/\//.test(content)) urlFlagged.push(file);
+    if (content.includes("<!--")) htmlFlagged.push(file);
+    if (INVISIBLE_CHARS.test(content)) invisibleFlagged.push(file);
+  }
+
+  return [
+    {
+      emoji: "\u{1F517}",
+      label: "No URLs",
+      passed: urlFlagged.length === 0,
+      details: urlFlagged,
+      failureMessage: "Skill contains URLs in markdown, make sure to review it properly.",
+    },
+    {
+      emoji: "\u{1F977}",
+      label: "No html comments",
+      passed: htmlFlagged.length === 0,
+      details: htmlFlagged,
+      failureMessage: "Skill has HTML comments in markdown, make sure to review it properly.",
+    },
+    {
+      emoji: "\u{1F47B}",
+      label: "No invisible chars",
+      passed: invisibleFlagged.length === 0,
+      details: invisibleFlagged,
+      failureMessage:
+        "Skill contains invisible unicode characters, make sure to review it properly.",
+    },
+  ];
 }
 
 // --- Internal helpers ---

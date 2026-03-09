@@ -366,43 +366,4 @@ describe("GitHubSourceProvider", () => {
       }
     });
   });
-
-  describe("resolveLatestVersion", () => {
-    test("returns commit SHA for installed skill", async () => {
-      const provider = createGitHubProvider({
-        gitClone: fakeGitClone({ "SKILL.md": VALID_SKILL_MD }),
-        gitRevParse: fakeRevParse,
-      });
-
-      const result = await provider.resolveLatestVersion({
-        source: "user/repo",
-        provider: "github",
-        version: "old-sha",
-        subdirectory: null,
-        installedAt: "2026-01-01T00:00:00.000Z",
-      });
-
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.value).toBe(FAKE_SHA);
-      }
-    });
-
-    test("returns error for invalid source URL", async () => {
-      const provider = createGitHubProvider({
-        gitClone: fakeGitClone({}),
-        gitRevParse: fakeRevParse,
-      });
-
-      const result = await provider.resolveLatestVersion({
-        source: "",
-        provider: "github",
-        version: "old-sha",
-        subdirectory: null,
-        installedAt: "2026-01-01T00:00:00.000Z",
-      });
-
-      expect(result.ok).toBe(false);
-    });
-  });
 });

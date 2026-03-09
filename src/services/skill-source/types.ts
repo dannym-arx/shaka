@@ -9,7 +9,6 @@
  */
 
 import type { Result } from "../../domain/result";
-import type { InstalledSkill } from "../../domain/skills-manifest";
 
 /** Result of fetching a skill from any source provider. */
 export interface FetchResult {
@@ -43,7 +42,4 @@ export interface SkillSourceProvider {
 
   /** Fetch skill content to a temp directory. */
   fetch(input: string, options?: FetchOptions): Promise<Result<FetchResult, Error>>;
-
-  /** Resolve the latest version for update detection. */
-  resolveLatestVersion(skill: InstalledSkill): Promise<Result<string, Error>>;
 }

@@ -104,19 +104,29 @@ export async function updateSkill(
   }
 }
 
+export interface UpdateAllResult {
+  results: UpdateResult[];
+  failures: { name: string; error: Error }[];
+}
+
 export async function updateAllSkills(
   shakaHome: string,
   options: UpdateOptions = {},
-): Promise<Result<UpdateResult[], Error>> {
+): Promise<Result<UpdateAllResult, Error>> {
   const manifestResult = await loadManifest(shakaHome);
   if (!manifestResult.ok) return manifestResult;
 
   const results: UpdateResult[] = [];
+  const failures: { name: string; error: Error }[] = [];
+
   for (const name of Object.keys(manifestResult.value.skills)) {
     const result = await updateSkill(shakaHome, name, options);
-    if (!result.ok) return result;
-    results.push(result.value);
+    if (result.ok) {
+      results.push(result.value);
+    } else {
+      failures.push({ name, error: result.error });
+    }
   }
 
-  return ok(results);
+  return ok({ results, failures });
 }

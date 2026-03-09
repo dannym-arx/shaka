@@ -1,18 +1,28 @@
 /**
  * Skill source provider setup and re-exports.
  *
- * Importing this module registers the default providers in priority order.
- * Tests should call clearProviders() before registering test-specific providers.
+ * Call registerDefaultProviders() from the CLI entry point before
+ * using detectProvider/getProviderByName. Tests should call
+ * clearProviders() before registering test-specific providers.
  */
 
 import { createClawdhubProvider } from "./clawdhub";
 import { createGitHubProvider } from "./github";
 import { registerProvider } from "./registry";
 
-// Register default providers in priority order.
-// GitHub first (matches `/`, `https://`, `git@`), Clawdhub catches bare words.
-registerProvider(createGitHubProvider());
-registerProvider(createClawdhubProvider());
+let defaultsRegistered = false;
+
+/**
+ * Register the built-in providers in priority order.
+ * Idempotent — safe to call multiple times.
+ */
+export function registerDefaultProviders(): void {
+  if (defaultsRegistered) return;
+  // GitHub first (matches `/`, `https://`, `git@`), Clawdhub catches bare words.
+  registerProvider(createGitHubProvider());
+  registerProvider(createClawdhubProvider());
+  defaultsRegistered = true;
+}
 
 export {
   detectProvider,
@@ -24,4 +34,4 @@ export type { SkillSourceProvider, FetchResult, FetchOptions } from "./types";
 export { createGitHubProvider } from "./github";
 export type { GitHubProviderOptions, GitCloneFn, GitRevParseFn } from "./github";
 export { createClawdhubProvider } from "./clawdhub";
-export type { ClawdhubProviderOptions, ClawdhubFetchFn, ClawdhubResolveFn } from "./clawdhub";
+export type { ClawdhubProviderOptions, ClawdhubFetchFn } from "./clawdhub";
