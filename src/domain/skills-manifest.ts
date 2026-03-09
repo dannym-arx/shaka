@@ -12,7 +12,7 @@ import { type Result, err, ok } from "./result";
 export interface InstalledSkill {
   /** Normalized source identifier (e.g. "user/repo", "sonoscli"). */
   readonly source: string;
-  /** Provider that installed this skill (e.g. "github", "clawdhub"). */
+  /** Provider that installed this skill (e.g. "github", "clawhub"). */
   readonly provider: string;
   /** Provider-specific version identifier (commit SHA, semver, etc.). */
   readonly version: string;

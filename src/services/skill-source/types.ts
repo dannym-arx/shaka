@@ -2,7 +2,7 @@
  * SkillSourceProvider interface and related types.
  *
  * A skill source provider knows how to fetch skills from a specific source
- * (GitHub, Clawdhub, etc.) and resolve version information for updates.
+ * (GitHub, Clawhub, etc.) and resolve version information for updates.
  *
  * All providers converge on the same FetchResult — the downstream pipeline
  * (validate, scan, deploy, persist) is source-agnostic.
@@ -34,7 +34,7 @@ export interface FetchOptions {
 
 /** A provider that can fetch skills from a specific source. */
 export interface SkillSourceProvider {
-  /** Provider name (e.g., "github", "clawdhub"). Used in manifest. */
+  /** Provider name (e.g., "github", "clawhub"). Used in manifest. */
   readonly name: string;
 
   /** Return true if this provider can handle the given input string. */

@@ -1,7 +1,7 @@
 /**
- * Clawdhub skill source provider.
+ * Clawhub skill source provider.
  *
- * Fetches skills from the Clawdhub registry (clawhub.ai) via HTTP.
+ * Fetches skills from the Clawhub registry (clawhub.ai) via HTTP.
  * Skills are distributed as ZIP archives containing SKILL.md + supporting files.
  *
  * API:
@@ -18,8 +18,8 @@ import type { FetchResult, SkillSourceProvider } from "./types";
 
 const DEFAULT_REGISTRY = "https://clawhub.ai";
 
-/** Parsed Clawdhub input: slug + optional version. */
-export interface ClawdhubInput {
+/** Parsed Clawhub input: slug + optional version. */
+export interface ClawhubInput {
   slug: string;
   version: string | undefined;
 }
@@ -28,21 +28,23 @@ export interface ClawdhubInput {
  * Fetches a skill from the registry to a local directory.
  * Returns the resolved version string.
  */
-export type ClawdhubFetchFn = (
+export type ClawhubFetchFn = (
   slug: string,
   version: string | undefined,
   destDir: string,
 ) => Promise<Result<{ version: string }, Error>>;
 
-export interface ClawdhubProviderOptions {
+export type ClawdhubFetchFn = ClawhubFetchFn;
+
+export interface ClawhubProviderOptions {
   /** Override the registry URL (default: https://clawhub.ai, env: CLAWHUB_REGISTRY). */
   registryUrl?: string;
   /** Override fetch+extract for testing. */
-  fetchSkill?: ClawdhubFetchFn;
+  fetchSkill?: ClawhubFetchFn;
 }
 
-/** Parse a Clawdhub input string into slug and optional version. */
-export function parseClawdhubInput(input: string): ClawdhubInput {
+/** Parse a Clawhub input string into slug and optional version. */
+export function parseClawhubInput(input: string): ClawhubInput {
   const trimmed = input.trim();
   const atIdx = trimmed.lastIndexOf("@");
 
@@ -56,13 +58,13 @@ export function parseClawdhubInput(input: string): ClawdhubInput {
   return { slug: trimmed.toLowerCase(), version: undefined };
 }
 
-/** Create a Clawdhub skill source provider. */
-export function createClawdhubProvider(options: ClawdhubProviderOptions = {}): SkillSourceProvider {
+/** Create a Clawhub skill source provider. */
+export function createClawhubProvider(options: ClawhubProviderOptions = {}): SkillSourceProvider {
   const registryUrl = options.registryUrl ?? process.env.CLAWHUB_REGISTRY ?? DEFAULT_REGISTRY;
   const fetchSkillFn = options.fetchSkill ?? createDefaultFetchSkill(registryUrl);
 
   return {
-    name: "clawdhub",
+    name: "clawhub",
 
     canHandle(input: string): boolean {
       const trimmed = input.trim();
@@ -73,9 +75,9 @@ export function createClawdhubProvider(options: ClawdhubProviderOptions = {}): S
     },
 
     async fetch(input: string): Promise<Result<FetchResult, Error>> {
-      const { slug, version } = parseClawdhubInput(input);
+      const { slug, version } = parseClawhubInput(input);
 
-      const tempDir = join(tmpdir(), `shaka-clawdhub-${Date.now()}`);
+      const tempDir = join(tmpdir(), `shaka-clawhub-${Date.now()}`);
       await mkdir(tempDir, { recursive: true });
 
       const result = await fetchSkillFn(slug, version, tempDir);
@@ -97,7 +99,7 @@ export function createClawdhubProvider(options: ClawdhubProviderOptions = {}): S
 
 // --- Default implementations ---
 
-function createDefaultFetchSkill(registryUrl: string): ClawdhubFetchFn {
+function createDefaultFetchSkill(registryUrl: string): ClawhubFetchFn {
   return async (slug, version, destDir) => {
     // 1. Resolve version if not specified via skill metadata endpoint
     let resolvedVersion: string;
@@ -128,7 +130,7 @@ function createDefaultFetchSkill(registryUrl: string): ClawdhubFetchFn {
     await Bun.write(zipPath, zipBytes);
 
     try {
-      await Bun.$`unzip -o ${zipPath} -d ${destDir}`.quiet();
+      await extractZipArchive(zipPath, destDir);
     } catch (e) {
       return err(new Error(`Failed to extract ZIP: ${e instanceof Error ? e.message : String(e)}`));
     } finally {
@@ -150,3 +152,30 @@ async function safeFetch(url: string): Promise<Result<Response, Error>> {
     return err(new Error(`Network error: ${e instanceof Error ? e.message : String(e)}`));
   }
 }
+
+async function extractZipArchive(zipPath: string, destDir: string): Promise<void> {
+  if (process.platform === "win32") {
+    const command = [
+      "Expand-Archive",
+      "-LiteralPath",
+      `'${escapePowerShellLiteral(zipPath)}'`,
+      "-DestinationPath",
+      `'${escapePowerShellLiteral(destDir)}'`,
+      "-Force",
+    ].join(" ");
+    await Bun.$`powershell -NoProfile -NonInteractive -Command ${command}`.quiet();
+    return;
+  }
+
+  await Bun.$`unzip -o ${zipPath} -d ${destDir}`.quiet();
+}
+
+function escapePowerShellLiteral(input: string): string {
+  return input.replace(/'/g, "''");
+}
+
+// Backward-compatible aliases (deprecated): remove in next major.
+export type ClawdhubInput = ClawhubInput;
+export type ClawdhubProviderOptions = ClawhubProviderOptions;
+export const parseClawdhubInput = parseClawhubInput;
+export const createClawdhubProvider = createClawhubProvider;

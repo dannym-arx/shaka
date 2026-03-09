@@ -190,6 +190,20 @@ describe("SkillInstallService", () => {
       }
     });
 
+    test("fails fast when skills manifest is unreadable", async () => {
+      await writeFile(join(tempDir, "skills.json"), "{invalid json");
+
+      const result = await installSkill(tempDir, "user/repo", {
+        provider: testProvider(),
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("Failed to read skills manifest");
+      }
+      expect(await Bun.file(join(tempDir, "skills", "TestSkill", "SKILL.md")).exists()).toBe(false);
+    });
+
     test("does not leave temp directory in shakaHome", async () => {
       await installSkill(tempDir, "user/repo", {
         provider: testProvider(),
@@ -392,6 +406,19 @@ describe("SkillInstallService", () => {
       expect(check?.details).toContain("hook.sh");
     });
 
+    test("detects extensionless files outside allowlist", async () => {
+      const dir = join(tempDir, "noext-risky");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "SKILL.md"), VALID_SKILL_MD);
+      await writeFile(join(dir, "install"), "#!/bin/bash\necho hi");
+
+      const report = await runSecurityChecks(dir);
+      expect(report.allPassed).toBe(false);
+      const check = report.checks.find((c) => c.label === "No executables");
+      expect(check?.passed).toBe(false);
+      expect(check?.details).toContain("install");
+    });
+
     test("detects HTML comments in markdown", async () => {
       const dir = join(tempDir, "html-skill");
       await mkdir(dir, { recursive: true });
@@ -553,6 +580,16 @@ describe("SkillInstallService", () => {
       expect(scan.safe).toHaveLength(2);
     });
 
+    test("treats extensionless files outside allowlist as unknown", async () => {
+      const dir = join(tempDir, "scan-noext-unknown");
+      await mkdir(dir, { recursive: true });
+      await writeFile(join(dir, "install"), "#!/bin/bash\necho hi");
+
+      const scan = await scanForExecutableContent(dir);
+      expect(scan.safe).toHaveLength(0);
+      expect(scan.unknown).toContain("install");
+    });
+
     test("scans subdirectories recursively", async () => {
       const dir = join(tempDir, "scan-nested");
       await mkdir(join(dir, "sub"), { recursive: true });
@@ -609,6 +646,21 @@ describe("SkillInstallService", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.error.message).toContain('"name" field');
+      }
+    });
+
+    test("parses YAML frontmatter with colon-containing values", async () => {
+      const dir = join(tempDir, "yaml-skill");
+      await mkdir(dir, { recursive: true });
+      await writeFile(
+        join(dir, "SKILL.md"),
+        `---\nname: TestSkill\ndescription: "A skill: with colon"\n---\n\n# TestSkill\n`,
+      );
+
+      const result = await validateSkillStructure(dir);
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.name).toBe("TestSkill");
       }
     });
   });

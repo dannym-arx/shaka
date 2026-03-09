@@ -213,9 +213,6 @@ if (import.meta.main) {
   program.addCommand(createRunCommand());
   program.addCommand(createScanCommand());
   program.addCommand(createSkillCommand());
-  program.addCommand(createCommandsCommand());
-  program.addCommand(createRunCommand());
-  program.addCommand(createScanCommand());
 
   program.parse(process.argv);
 }

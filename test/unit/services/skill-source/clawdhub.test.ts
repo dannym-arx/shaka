@@ -4,8 +4,8 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { ok } from "../../../../src/domain/result";
 import {
-  createClawdhubProvider,
-  parseClawdhubInput,
+  createClawhubProvider,
+  parseClawhubInput,
 } from "../../../../src/services/skill-source/clawdhub";
 
 const VALID_SKILL_MD = `---
@@ -34,11 +34,11 @@ function fakeFetchSkillWithVersion(resolvedVersion: string) {
   };
 }
 
-describe("ClawdhubSourceProvider", () => {
+describe("ClawhubSourceProvider", () => {
   let tempDir: string;
 
   beforeEach(async () => {
-    tempDir = join(tmpdir(), `shaka-test-clawdhub-${Date.now()}`);
+    tempDir = join(tmpdir(), `shaka-test-clawhub-${Date.now()}`);
     await mkdir(tempDir, { recursive: true });
   });
 
@@ -46,51 +46,51 @@ describe("ClawdhubSourceProvider", () => {
     await rm(tempDir, { recursive: true, force: true });
   });
 
-  describe("parseClawdhubInput", () => {
+  describe("parseClawhubInput", () => {
     test("parses bare slug", () => {
-      const result = parseClawdhubInput("sonoscli");
+      const result = parseClawhubInput("sonoscli");
       expect(result.slug).toBe("sonoscli");
       expect(result.version).toBeUndefined();
     });
 
     test("parses slug with version", () => {
-      const result = parseClawdhubInput("sonoscli@1.2.0");
+      const result = parseClawhubInput("sonoscli@1.2.0");
       expect(result.slug).toBe("sonoscli");
       expect(result.version).toBe("1.2.0");
     });
 
     test("parses slug with latest tag", () => {
-      const result = parseClawdhubInput("myskill@latest");
+      const result = parseClawhubInput("myskill@latest");
       expect(result.slug).toBe("myskill");
       expect(result.version).toBe("latest");
     });
 
     test("handles leading/trailing whitespace", () => {
-      const result = parseClawdhubInput("  sonoscli@1.0.0  ");
+      const result = parseClawhubInput("  sonoscli@1.0.0  ");
       expect(result.slug).toBe("sonoscli");
       expect(result.version).toBe("1.0.0");
     });
 
     test("handles slug without @ as bare slug", () => {
-      const result = parseClawdhubInput("my-cool-skill");
+      const result = parseClawhubInput("my-cool-skill");
       expect(result.slug).toBe("my-cool-skill");
       expect(result.version).toBeUndefined();
     });
 
     test("normalizes slug to lowercase", () => {
-      const result = parseClawdhubInput("Trello");
+      const result = parseClawhubInput("Trello");
       expect(result.slug).toBe("trello");
     });
 
     test("normalizes slug to lowercase with version", () => {
-      const result = parseClawdhubInput("Trello@1.0.0");
+      const result = parseClawhubInput("Trello@1.0.0");
       expect(result.slug).toBe("trello");
       expect(result.version).toBe("1.0.0");
     });
   });
 
   describe("canHandle", () => {
-    const provider = createClawdhubProvider();
+    const provider = createClawhubProvider();
 
     test("returns true for bare word", () => {
       expect(provider.canHandle("sonoscli")).toBe(true);
@@ -119,7 +119,7 @@ describe("ClawdhubSourceProvider", () => {
 
   describe("fetch", () => {
     test("fetches skill and returns FetchResult", async () => {
-      const provider = createClawdhubProvider({
+      const provider = createClawhubProvider({
         fetchSkill: fakeFetchSkill(),
       });
 
@@ -137,7 +137,7 @@ describe("ClawdhubSourceProvider", () => {
 
     test("passes version from input to fetchSkill", async () => {
       let receivedVersion: string | undefined;
-      const provider = createClawdhubProvider({
+      const provider = createClawhubProvider({
         fetchSkill: async (slug, version, destDir) => {
           receivedVersion = version;
           await mkdir(destDir, { recursive: true });
@@ -158,7 +158,7 @@ describe("ClawdhubSourceProvider", () => {
 
     test("passes undefined version for bare slug", async () => {
       let receivedVersion: string | undefined = "not-called";
-      const provider = createClawdhubProvider({
+      const provider = createClawhubProvider({
         fetchSkill: async (_slug, version, destDir) => {
           receivedVersion = version;
           await mkdir(destDir, { recursive: true });
@@ -174,7 +174,7 @@ describe("ClawdhubSourceProvider", () => {
 
     test("passes slug without version suffix", async () => {
       let receivedSlug = "";
-      const provider = createClawdhubProvider({
+      const provider = createClawhubProvider({
         fetchSkill: async (slug, _version, destDir) => {
           receivedSlug = slug;
           await mkdir(destDir, { recursive: true });
@@ -189,7 +189,7 @@ describe("ClawdhubSourceProvider", () => {
     });
 
     test("propagates fetchSkill errors", async () => {
-      const provider = createClawdhubProvider({
+      const provider = createClawhubProvider({
         fetchSkill: async () => {
           return { ok: false as const, error: new Error("Download failed: 404") };
         },
@@ -205,7 +205,7 @@ describe("ClawdhubSourceProvider", () => {
 
     test("cleans up temp dir on fetchSkill failure", async () => {
       let capturedDestDir = "";
-      const provider = createClawdhubProvider({
+      const provider = createClawhubProvider({
         fetchSkill: async (_slug, _version, destDir) => {
           capturedDestDir = destDir;
           return { ok: false as const, error: new Error("fail") };

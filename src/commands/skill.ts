@@ -33,10 +33,11 @@ export function createSkillCommand(): Command {
   skill
     .command("install")
     .description("Install a skill (auto-detects source)")
-    .argument("<source>", "Skill source (user/repo, URL, or clawdhub slug)")
+    .argument("<source>", "Skill source (user/repo, URL, or clawhub slug)")
     .option("--yolo", "Skip security checks and install without confirmation", false)
     .option("--github", "Force GitHub provider")
-    .option("--clawdhub", "Force Clawdhub provider")
+    .option("--clawhub", "Force Clawhub provider")
+    .option("--clawdhub", "Deprecated alias for --clawhub")
     .action(handleInstall);
 
   skill
@@ -58,7 +59,7 @@ export function createSkillCommand(): Command {
 
 async function handleInstall(
   source: string,
-  opts: { yolo: boolean; github?: boolean; clawdhub?: boolean },
+  opts: { yolo: boolean; github?: boolean; clawhub?: boolean; clawdhub?: boolean },
 ): Promise<void> {
   const shakaHome = getShakaHome();
 
@@ -178,12 +179,14 @@ async function handleList(): Promise<void> {
 
 // --- Helpers ---
 
-function resolveProviderFlag(opts: { github?: boolean; clawdhub?: boolean }) {
-  if (opts.github && opts.clawdhub) {
-    return { ok: false as const, error: new Error("Cannot use both --github and --clawdhub") };
+function resolveProviderFlag(opts: { github?: boolean; clawhub?: boolean; clawdhub?: boolean }) {
+  const useClawhub = Boolean(opts.clawhub || opts.clawdhub);
+
+  if (opts.github && useClawhub) {
+    return { ok: false as const, error: new Error("Cannot use both --github and --clawhub") };
   }
   if (opts.github) return getProviderByName("github");
-  if (opts.clawdhub) return getProviderByName("clawdhub");
+  if (useClawhub) return getProviderByName("clawhub");
   return null;
 }
 
@@ -223,6 +226,7 @@ async function listSkillDirs(dir: string): Promise<string[]> {
 async function readLine(): Promise<string> {
   return new Promise((resolve) => {
     process.stdin.setEncoding("utf-8");
+    process.stdin.resume();
     const timeout = setTimeout(() => {
       process.stdin.pause();
       resolve("n");

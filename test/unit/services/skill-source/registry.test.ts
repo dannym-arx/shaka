@@ -51,7 +51,7 @@ describe("skill source registry", () => {
   describe("detectProvider", () => {
     test("returns first matching provider", () => {
       registerProvider(makeProvider("github", (i) => i.includes("/")));
-      registerProvider(makeProvider("clawdhub", () => true));
+      registerProvider(makeProvider("clawhub", () => true));
 
       const result = detectProvider("user/repo");
       expect(result.ok).toBe(true);
@@ -62,12 +62,12 @@ describe("skill source registry", () => {
 
     test("falls through to next provider if first does not match", () => {
       registerProvider(makeProvider("github", (i) => i.includes("/")));
-      registerProvider(makeProvider("clawdhub", () => true));
+      registerProvider(makeProvider("clawhub", () => true));
 
       const result = detectProvider("sonoscli");
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.name).toBe("clawdhub");
+        expect(result.value.name).toBe("clawhub");
       }
     });
 
@@ -90,12 +90,22 @@ describe("skill source registry", () => {
   describe("getProviderByName", () => {
     test("returns provider by name", () => {
       registerProvider(makeProvider("github", () => true));
-      registerProvider(makeProvider("clawdhub", () => true));
+      registerProvider(makeProvider("clawhub", () => true));
+
+      const result = getProviderByName("clawhub");
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.value.name).toBe("clawhub");
+      }
+    });
+
+    test("maps legacy clawdhub alias to clawhub provider", () => {
+      registerProvider(makeProvider("clawhub", () => true));
 
       const result = getProviderByName("clawdhub");
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.value.name).toBe("clawdhub");
+        expect(result.value.name).toBe("clawhub");
       }
     });
 

@@ -6,7 +6,7 @@
  *
  * Registration order matters:
  *   1. GitHub (matches inputs with `/`, `https://`, `git@`)
- *   2. Clawdhub (catches bare words like `sonoscli`, `sonoscli@1.2.0`)
+ *   2. Clawhub (catches bare words like `sonoscli`, `sonoscli@1.2.0`)
  */
 
 import { type Result, err, ok } from "../../domain/result";
@@ -34,7 +34,9 @@ export function detectProvider(input: string): Result<SkillSourceProvider, Error
 
 /** Look up a provider by name (used for updates from manifest). */
 export function getProviderByName(name: string): Result<SkillSourceProvider, Error> {
-  const provider = providers.find((p) => p.name === name);
+  const provider =
+    providers.find((p) => p.name === name) ??
+    (name === "clawdhub" ? providers.find((p) => p.name === "clawhub") : undefined);
   if (!provider) {
     return err(new Error(`Unknown skill source provider: ${name}`));
   }

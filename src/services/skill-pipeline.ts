@@ -7,6 +7,7 @@
 
 import { cp, mkdir, readdir, rm } from "node:fs/promises";
 import { join } from "node:path";
+import { parse as parseYaml } from "yaml";
 import { type Result, err, ok } from "../domain/result";
 import {
   type InstalledSkill,
@@ -85,19 +86,17 @@ async function copySkillFiles(source: string, target: string): Promise<void> {
   }
 }
 
-function parseFrontmatter(content: string): Record<string, string> | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
+function parseFrontmatter(content: string): Record<string, unknown> | null {
+  const match = content.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   if (!match) return null;
 
-  const result: Record<string, string> = {};
-  const lines = (match[1] as string).split("\n");
-  for (const line of lines) {
-    const colonIdx = line.indexOf(":");
-    if (colonIdx > 0) {
-      const key = line.slice(0, colonIdx).trim();
-      const value = line.slice(colonIdx + 1).trim();
-      result[key] = value;
+  try {
+    const parsed = parseYaml(match[1] as string);
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+      return null;
     }
+    return parsed as Record<string, unknown>;
+  } catch {
+    return null;
   }
-  return result;
 }

@@ -149,7 +149,7 @@ shaka commands list            # Show all commands and status
 shaka commands new <name>     # Create a new command
 shaka commands disable <name> # Disable a command
 shaka commands enable <name>  # Re-enable a disabled command
-shaka skill install <source>  # Install a skill (auto-detects GitHub or Clawdhub)
+shaka skill install <source>  # Install a skill (auto-detects GitHub or Clawhub)
 shaka skill remove <name>     # Remove an installed skill
 shaka skill update [name]     # Update one or all installed skills
 shaka skill list              # List system + installed skills
@@ -403,7 +403,7 @@ Skills are invoked by context ("review this PR") or explicitly ("use the code-re
 
 **Installing skills:**
 
-Skills can be installed from GitHub repositories or the Clawdhub registry. The source is auto-detected based on input format:
+Skills can be installed from GitHub repositories or the Clawhub registry. The source is auto-detected based on input format:
 
 ```bash
 # GitHub (auto-detected when input contains /)
@@ -412,17 +412,17 @@ shaka skill install user/repo#v1.0.0       # Specific ref
 shaka skill install https://github.com/user/skill-repo
 shaka skill install https://github.com/user/repo/tree/main/skills/my-skill
 
-# Clawdhub (auto-detected for bare words without /)
+# Clawhub (auto-detected for bare words without /)
 shaka skill install sonoscli               # Latest version
 shaka skill install sonoscli@1.2.0         # Specific version
 
 # Explicit provider override
 shaka skill install my-skill --github      # Force GitHub provider
-shaka skill install user/repo --clawdhub   # Force Clawdhub provider
+shaka skill install my-skill --clawhub     # Force Clawhub provider
+shaka skill install my-skill --clawdhub    # Legacy alias (deprecated)
 
 # Security options
-shaka skill install user/repo --force      # Skip security scan prompt
-shaka skill install user/repo --safe-only  # Abort if non-text files found
+shaka skill install user/repo --yolo       # Skip security checks and prompt
 ```
 
 GitHub repos without a root `SKILL.md` are checked for `.claude-plugin/marketplace.json` — if found, available skills are listed for selection.

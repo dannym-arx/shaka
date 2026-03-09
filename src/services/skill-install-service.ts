@@ -5,12 +5,12 @@
  * validate → security checks → collision check → deploy → persist.
  */
 
-import { readdir } from "node:fs/promises";
-import { extname, join } from "node:path";
+import { readdir, rm } from "node:fs/promises";
+import { basename, extname, join } from "node:path";
 import { type Result, err, ok } from "../domain/result";
 import type { InstalledSkill } from "../domain/skills-manifest";
 import { loadManifest } from "../domain/skills-manifest";
-import { linkSkillToProviders } from "./skill-linker";
+import { linkSkillToProviders, unlinkSkillFromProviders } from "./skill-linker";
 import {
   cleanupTempDir,
   installSkillFiles,
@@ -54,11 +54,13 @@ export interface InstallOptions {
   onSecurityCheck?: (report: SecurityReport, skillName: string) => Promise<boolean>;
   /** Callback to let user choose from multiple skills (marketplace repos). */
   selectSkill?: (skills: { name: string; description?: string }[]) => Promise<string | null>;
-  /** Override auto-detected provider (e.g., from --github or --clawdhub flag). */
+  /** Override auto-detected provider (e.g., from --github or --clawhub flag). */
   provider?: SkillSourceProvider;
 }
 
 const SAFE_EXTENSIONS = new Set([".md", ".txt", ".yaml", ".yml", ".json", ".xml", ".csv", ".toml"]);
+
+const SAFE_BASENAMES = new Set(["README", "LICENSE", "NOTICE", "CHANGELOG", "SKILL", ".GITIGNORE"]);
 
 const EXECUTABLE_EXTENSIONS = new Set([
   ".ts",
@@ -115,16 +117,28 @@ export async function installSkill(
     if (!collisionResult.ok) return collisionResult;
 
     // Deploy, persist, and link to providers
-    await installSkillFiles(fetchResult.value.skillDir, shakaHome, validation.value.name);
-    await linkSkillToProviders(shakaHome, validation.value.name);
+    try {
+      await installSkillFiles(fetchResult.value.skillDir, shakaHome, validation.value.name);
+      await linkSkillToProviders(shakaHome, validation.value.name);
+    } catch (e) {
+      await rollbackInstalledSkill(shakaHome, validation.value.name);
+      return err(e instanceof Error ? e : new Error(String(e)));
+    }
 
-    return await persistToManifest(shakaHome, validation.value.name, {
+    const persistResult = await persistToManifest(shakaHome, validation.value.name, {
       source: fetchResult.value.source,
       provider: provider.name,
       version: fetchResult.value.version,
       subdirectory: fetchResult.value.subdirectory,
       installedAt: new Date().toISOString(),
     });
+
+    if (!persistResult.ok) {
+      await rollbackInstalledSkill(shakaHome, validation.value.name);
+      return persistResult;
+    }
+
+    return persistResult;
   } finally {
     await cleanupTempDir(fetchResult.value.tempDir);
   }
@@ -139,8 +153,9 @@ export async function scanForExecutableContent(skillPath: string): Promise<ScanR
   const entries = await collectFiles(skillPath);
   for (const relativePath of entries) {
     const ext = extname(relativePath).toLowerCase();
+    const fileBase = basename(relativePath).toUpperCase();
 
-    if (SAFE_EXTENSIONS.has(ext) || ext === "") {
+    if (SAFE_EXTENSIONS.has(ext) || (ext === "" && SAFE_BASENAMES.has(fileBase))) {
       result.safe.push(relativePath);
     } else if (EXECUTABLE_EXTENSIONS.has(ext)) {
       result.executable.push(relativePath);
@@ -190,7 +205,10 @@ function checkExecutablesFromList(files: string[]): SecurityCheckEntry {
   const risky: string[] = [];
   for (const relativePath of files) {
     const ext = extname(relativePath).toLowerCase();
-    if (ext !== "" && !SAFE_EXTENSIONS.has(ext)) {
+    const fileBase = basename(relativePath).toUpperCase();
+    const hasSafeExtension = SAFE_EXTENSIONS.has(ext);
+    const hasSafeBasename = ext === "" && SAFE_BASENAMES.has(fileBase);
+    if (!hasSafeExtension && !hasSafeBasename) {
       risky.push(relativePath);
     }
   }
@@ -265,11 +283,19 @@ async function checkNameCollision(shakaHome: string, name: string): Promise<Resu
   }
 
   const manifest = await loadManifest(shakaHome);
-  if (manifest.ok && manifest.value.skills[name]) {
+  if (!manifest.ok) {
+    return err(manifest.error);
+  }
+  if (manifest.value.skills[name]) {
     return err(new Error(`Skill "${name}" is already installed. Remove it first or use update.`));
   }
 
   return ok(undefined);
+}
+
+async function rollbackInstalledSkill(shakaHome: string, skillName: string): Promise<void> {
+  await unlinkSkillFromProviders(shakaHome, skillName).catch(() => {});
+  await rm(join(shakaHome, "skills", skillName), { recursive: true, force: true }).catch(() => {});
 }
 
 async function collectFiles(dir: string, prefix = ""): Promise<string[]> {
