@@ -81,21 +81,26 @@ export function createClawhubProvider(options: ClawhubProviderOptions = {}): Ski
         tmpdir(),
         `shaka-clawhub-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
       );
-      await mkdir(tempDir, { recursive: true });
+      try {
+        await mkdir(tempDir, { recursive: true });
 
-      const result = await fetchSkillFn(slug, version, tempDir);
-      if (!result.ok) {
-        await cleanupTempDir(tempDir);
-        return result;
+        const result = await fetchSkillFn(slug, version, tempDir);
+        if (!result.ok) {
+          await cleanupTempDir(tempDir).catch(() => {});
+          return result;
+        }
+
+        return ok({
+          skillDir: tempDir,
+          tempDir,
+          version: result.value.version,
+          source: slug,
+          subdirectory: null,
+        });
+      } catch (e) {
+        await cleanupTempDir(tempDir).catch(() => {});
+        return err(e instanceof Error ? e : new Error(String(e)));
       }
-
-      return ok({
-        skillDir: tempDir,
-        tempDir,
-        version: result.value.version,
-        source: slug,
-        subdirectory: null,
-      });
     },
   };
 }

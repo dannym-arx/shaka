@@ -217,5 +217,24 @@ describe("ClawhubSourceProvider", () => {
       // Temp dir should be cleaned up
       expect(await Bun.file(capturedDestDir).exists()).toBe(false);
     });
+
+    test("cleans up temp dir and returns err when fetchSkill throws", async () => {
+      let capturedDestDir = "";
+      const provider = createClawhubProvider({
+        fetchSkill: async (_slug, _version, destDir) => {
+          capturedDestDir = destDir;
+          await mkdir(destDir, { recursive: true });
+          throw new Error("boom");
+        },
+      });
+
+      const result = await provider.fetch("sonoscli");
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.message).toContain("boom");
+      }
+      expect(await Bun.file(capturedDestDir).exists()).toBe(false);
+    });
   });
 });

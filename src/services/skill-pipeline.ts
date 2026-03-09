@@ -5,7 +5,7 @@
  * validate structure, copy files, persist to manifest, and cleanup.
  */
 
-import { cp, mkdir, readdir, rm } from "node:fs/promises";
+import { cp, mkdir, readdir, rename, rm } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
 import { parse as parseYaml } from "yaml";
 import { type Result, err, ok } from "../domain/result";
@@ -30,9 +30,43 @@ export async function installSkillFiles(
   skillName: string,
 ): Promise<void> {
   const targetDir = join(shakaHome, "skills", skillName);
-  await rm(targetDir, { recursive: true, force: true });
-  await mkdir(targetDir, { recursive: true });
-  await copySkillFiles(skillSourceDir, targetDir);
+  const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const stagingDir = `${targetDir}.staging-${suffix}`;
+  const backupDir = `${targetDir}.backup-${suffix}`;
+
+  await rm(stagingDir, { recursive: true, force: true });
+  await rm(backupDir, { recursive: true, force: true });
+
+  await mkdir(stagingDir, { recursive: true });
+  try {
+    await copySkillFiles(skillSourceDir, stagingDir);
+
+    let movedExistingTarget = false;
+    try {
+      await rename(targetDir, backupDir);
+      movedExistingTarget = true;
+    } catch (e) {
+      const error = e as NodeJS.ErrnoException;
+      if (error.code !== "ENOENT") throw e;
+    }
+
+    try {
+      await rename(stagingDir, targetDir);
+    } catch (e) {
+      if (movedExistingTarget) {
+        await rename(backupDir, targetDir).catch(() => {});
+      }
+      throw e;
+    }
+
+    if (movedExistingTarget) {
+      await rm(backupDir, { recursive: true, force: true });
+    }
+  } catch (e) {
+    await rm(stagingDir, { recursive: true, force: true }).catch(() => {});
+    await rm(backupDir, { recursive: true, force: true }).catch(() => {});
+    throw e;
+  }
 }
 
 /**
@@ -87,7 +121,7 @@ async function copySkillFiles(source: string, target: string): Promise<void> {
   await mkdir(target, { recursive: true });
   const entries = await readdir(source, { withFileTypes: true });
   for (const entry of entries) {
-    if (entry.name === ".git") continue;
+    if (entry.name === ".git" || entry.name === "_backup") continue;
 
     const sourcePath = join(source, entry.name);
     const targetPath = join(target, entry.name);

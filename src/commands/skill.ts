@@ -166,6 +166,9 @@ async function handleUpdate(name?: string): Promise<void> {
     for (const f of failures) {
       console.error(`  ✗ "${f.name}": ${f.error.message}`);
     }
+    if (failures.length > 0) {
+      process.exitCode = 1;
+    }
   }
 }
 

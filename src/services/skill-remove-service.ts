@@ -13,7 +13,7 @@ import {
   removeSkill as removeFromManifest,
   saveManifest,
 } from "../domain/skills-manifest";
-import { unlinkSkillFromProviders } from "./skill-linker";
+import { linkSkillToProviders, unlinkSkillFromProviders } from "./skill-linker";
 
 export async function removeSkill(
   shakaHome: string,
@@ -39,15 +39,22 @@ export async function removeSkill(
   const saveResult = await saveManifest(shakaHome, updatedManifest);
   if (!saveResult.ok) return saveResult;
 
+  let unlinkedProviders = false;
   try {
     // Unlink from providers before removing source directory
     await unlinkSkillFromProviders(shakaHome, name);
+    unlinkedProviders = true;
 
     // Remove directory
     const skillDir = join(shakaHome, "skills", name);
     await rm(skillDir, { recursive: true, force: true });
   } catch (e) {
     await saveManifest(shakaHome, manifestResult.value);
+
+    if (unlinkedProviders) {
+      await linkSkillToProviders(shakaHome, name).catch(() => {});
+    }
+
     return err(e instanceof Error ? e : new Error(String(e)));
   }
 

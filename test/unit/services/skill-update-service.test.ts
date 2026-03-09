@@ -221,6 +221,23 @@ describe("SkillUpdateService", () => {
         expect(result.value.warnings).toBeUndefined();
       }
     });
+
+    test("does not deploy _backup directory into installed skill", async () => {
+      await installFakeSkill("TestSkill");
+
+      const result = await updateSkill(tempDir, "TestSkill", {
+        provider: testProvider(
+          UPDATED_SHA,
+          fakeGitCloneWithFiles({
+            "SKILL.md": VALID_SKILL_MD,
+            "notes.md": "hello",
+          }),
+        ),
+      });
+
+      expect(result.ok).toBe(true);
+      expect(await Bun.file(join(tempDir, "skills", "TestSkill", "_backup")).exists()).toBe(false);
+    });
   });
 
   describe("updateAllSkills", () => {
