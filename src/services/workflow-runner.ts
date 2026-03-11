@@ -8,7 +8,13 @@ import { mkdir } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { runAgentStep } from "../domain/agent-execution";
-import type { RunMetadata, StepResult, Workflow, WorkflowStep } from "../domain/workflow";
+import type {
+  GroupStep,
+  RunMetadata,
+  StepResult,
+  Workflow,
+  WorkflowStep,
+} from "../domain/workflow";
 import {
   addWorktree,
   commitAll,
@@ -24,7 +30,13 @@ export interface RunOptions {
   readonly cwd: string;
   readonly shakaHome: string;
   /** Called when a step starts executing. */
-  readonly onStepStart?: (stepName: string, stepIndex: number, total: number) => void;
+  readonly onStepStart?: (
+    stepName: string,
+    stepIndex: number,
+    total: number,
+    loopIteration: number,
+    loopTotal: number,
+  ) => void;
   /** Called when a step finishes executing. */
   readonly onStepComplete?: (stepName: string, exitCode: number, durationMs: number) => void;
 }
@@ -51,12 +63,20 @@ export function generateRunId(): string {
   ].join("");
 }
 
+export interface LoopContext {
+  readonly iteration: number;
+  readonly total: number;
+}
+
+const DEFAULT_LOOP: LoopContext = { iteration: 1, total: 1 };
+
 /** Resolve template variables in a string. */
 export function resolveTemplates(
   template: string,
   input: string,
   steps: Map<string, StepResult>,
   previousResult: StepResult | null,
+  loop: LoopContext = DEFAULT_LOOP,
 ): string {
   let result = template;
 
@@ -75,12 +95,16 @@ export function resolveTemplates(
     return step != null ? String(step.exitCode) : "";
   });
 
+  // Loop context
+  result = result.replace(/\{loop\.iteration\}/g, () => String(loop.iteration));
+  result = result.replace(/\{loop\.total\}/g, () => String(loop.total));
+
   return result;
 }
 
-/** Execute a single workflow step. */
-async function executeStep(
-  step: WorkflowStep,
+/** Execute a single leaf workflow step (not a group). */
+async function executeLeafStep(
+  step: Exclude<WorkflowStep, GroupStep>,
   resolvedValue: string,
   cwd: string,
 ): Promise<{ exitCode: number; stdout: string }> {
@@ -110,8 +134,8 @@ async function executeStep(
   }
 }
 
-/** Get the resolved value string from a step (the command/prompt/run content). */
-function getStepValue(step: WorkflowStep): string {
+/** Get the resolved value string from a leaf step (the command/prompt/run content). */
+function getStepValue(step: Exclude<WorkflowStep, GroupStep>): string {
   switch (step.type) {
     case "command":
       return step.command;
@@ -179,6 +203,7 @@ async function failEarly(
   input: string,
   startedAt: string,
   artifactDir: string,
+  totalIterations: number,
 ): Promise<RunResult> {
   const metadata: RunMetadata = {
     workflow,
@@ -186,6 +211,8 @@ async function failEarly(
     startedAt,
     branch: null,
     steps: [],
+    totalIterations,
+    completedIterations: 0,
     completedAt: new Date().toISOString(),
     status: "failed",
   };
@@ -196,27 +223,70 @@ async function failEarly(
 interface StepContext {
   readonly input: string;
   readonly cwd: string;
-  readonly artifactDir: string;
+  /** Current artifact directory — groups temporarily override this for their subdirectory. */
+  artifactDir: string;
   readonly workflowName: string;
   readonly useGit: boolean;
-  readonly totalSteps: number;
-  readonly stepResults: StepResult[];
-  readonly stepMap: Map<string, StepResult>;
-  readonly onStepStart?: (stepName: string, stepIndex: number, total: number) => void;
+  /** Total steps at the current nesting level. Groups temporarily override this. */
+  totalSteps: number;
+  /** Accumulates across all iterations and groups — written to run.json at the end. */
+  stepResults: StepResult[];
+  /** Reset per iteration — used only for {steps.<name>} template resolution. Groups isolate this. */
+  stepMap: Map<string, StepResult>;
+  readonly onStepStart?: (
+    stepName: string,
+    stepIndex: number,
+    total: number,
+    loopIteration: number,
+    loopTotal: number,
+  ) => void;
   readonly onStepComplete?: (stepName: string, exitCode: number, durationMs: number) => void;
+  // Mutable: loop advances each iteration; previousResult updates after each step.
+  loop: LoopContext;
   previousResult: StepResult | null;
 }
 
-/** Execute one step, record its result, and optionally git-commit. Returns "halt" if the pipeline should stop. */
-async function runStep(step: WorkflowStep, ctx: StepContext): Promise<"continue" | "halt"> {
-  const rawValue = getStepValue(step);
-  const resolvedValue = resolveTemplates(rawValue, ctx.input, ctx.stepMap, ctx.previousResult);
-  const stepIndex = ctx.stepResults.length;
+/** Resolve the artifact output path for a step, accounting for loop iterations. */
+function artifactPath(artifactDir: string, stepName: string, loop: LoopContext): string {
+  if (loop.total <= 1) return join(artifactDir, `${stepName}.out`);
+  return join(artifactDir, `iter-${loop.iteration}`, `${stepName}.out`);
+}
 
-  ctx.onStepStart?.(step.name, stepIndex, ctx.totalSteps);
+/** Format a git commit message, including iteration context when looping. */
+function commitMessage(stepName: string, workflowName: string, loop: LoopContext): string {
+  if (loop.total <= 1) return `shaka(${stepName}): ${workflowName}`;
+  return `shaka(${stepName})[${loop.iteration}/${loop.total}]: ${workflowName}`;
+}
+
+/** Execute one step (leaf or group). Returns "halt" if the pipeline should stop. */
+async function runStep(
+  step: WorkflowStep,
+  ctx: StepContext,
+  stepIndex: number,
+): Promise<"continue" | "halt"> {
+  if (step.type === "group") return runGroup(step, ctx);
+  return runLeafStep(step, ctx, stepIndex);
+}
+
+/** Execute a leaf step, record its result, and optionally git-commit. */
+async function runLeafStep(
+  step: Exclude<WorkflowStep, GroupStep>,
+  ctx: StepContext,
+  stepIndex: number,
+): Promise<"continue" | "halt"> {
+  const rawValue = getStepValue(step);
+  const resolvedValue = resolveTemplates(
+    rawValue,
+    ctx.input,
+    ctx.stepMap,
+    ctx.previousResult,
+    ctx.loop,
+  );
+
+  ctx.onStepStart?.(step.name, stepIndex, ctx.totalSteps, ctx.loop.iteration, ctx.loop.total);
 
   const startMs = Date.now();
-  const { exitCode, stdout } = await executeStep(step, resolvedValue, ctx.cwd);
+  const { exitCode, stdout } = await executeLeafStep(step, resolvedValue, ctx.cwd);
   const durationMs = Date.now() - startMs;
 
   ctx.onStepComplete?.(step.name, exitCode, durationMs);
@@ -227,18 +297,20 @@ async function runStep(step: WorkflowStep, ctx: StepContext): Promise<"continue"
     exitCode,
     output: stdout,
     durationMs,
+    iteration: ctx.loop.iteration,
   };
 
   ctx.stepResults.push(result);
   ctx.stepMap.set(step.name, result);
   ctx.previousResult = result;
 
-  await Bun.write(join(ctx.artifactDir, `${step.name}.out`), stdout);
+  const outPath = artifactPath(ctx.artifactDir, step.name, ctx.loop);
+  await Bun.write(outPath, stdout);
 
   if (ctx.useGit) {
     try {
       if (await hasChanges(ctx.cwd)) {
-        await commitAll(`shaka(${step.name}): ${ctx.workflowName}`, ctx.cwd);
+        await commitAll(commitMessage(step.name, ctx.workflowName, ctx.loop), ctx.cwd);
       }
     } catch (err) {
       console.error(
@@ -255,35 +327,105 @@ async function runStep(step: WorkflowStep, ctx: StepContext): Promise<"continue"
   return "continue";
 }
 
-/** Run all steps, guaranteeing worktree cleanup on any exit path. */
+/** Execute a group step — runs inner steps with isolated stepMap and its own loop context. */
+async function runGroup(group: GroupStep, ctx: StepContext): Promise<"continue" | "halt"> {
+  const outerLoop = ctx.loop;
+  const outerStepMap = ctx.stepMap;
+  const outerArtifactDir = ctx.artifactDir;
+  const outerTotalSteps = ctx.totalSteps;
+
+  // Groups get their own artifact subdirectory
+  const groupArtifactDir = join(ctx.artifactDir, group.name);
+
+  ctx.stepMap = new Map();
+  ctx.artifactDir = groupArtifactDir;
+  ctx.totalSteps = group.steps.length;
+
+  let halted = false;
+  for (let iteration = 1; iteration <= group.loop; iteration++) {
+    ctx.loop = { iteration, total: group.loop };
+
+    if (group.loop > 1) {
+      await mkdir(join(groupArtifactDir, `iter-${iteration}`), { recursive: true });
+    }
+
+    ctx.stepMap.clear();
+    for (const [i, step] of group.steps.entries()) {
+      if ((await runStep(step, ctx, i)) === "halt") {
+        halted = true;
+        break;
+      }
+    }
+    if (halted) break;
+  }
+
+  // Project the group result into the outer context
+  if (ctx.previousResult) {
+    outerStepMap.set(group.name, ctx.previousResult);
+  }
+
+  // Restore outer context
+  ctx.stepMap = outerStepMap;
+  ctx.loop = outerLoop;
+  ctx.artifactDir = outerArtifactDir;
+  ctx.totalSteps = outerTotalSteps;
+
+  if (halted && !group.allowFailure) return "halt";
+  return "continue";
+}
+
+interface ExecutionResult {
+  readonly failed: boolean;
+  readonly completedIterations: number;
+}
+
+/** Run all steps in a single iteration. Returns true if a step halted. */
+async function runIteration(steps: readonly WorkflowStep[], ctx: StepContext): Promise<boolean> {
+  if (ctx.loop.total > 1) {
+    await mkdir(join(ctx.artifactDir, `iter-${ctx.loop.iteration}`), { recursive: true });
+  }
+  // Reset the step map so {steps.<name>} resolves only the current iteration.
+  // previousResult is intentionally NOT reset — it carries across iterations.
+  ctx.stepMap.clear();
+  for (const [i, step] of steps.entries()) {
+    if ((await runStep(step, ctx, i)) === "halt") return true;
+  }
+  return false;
+}
+
+/** Clean up a worktree, logging errors instead of throwing. */
+async function cleanupWorktree(worktreePath: string, cwd: string): Promise<void> {
+  try {
+    await removeWorktree(worktreePath, cwd);
+  } catch (err) {
+    console.error(`Failed to remove worktree: ${err instanceof Error ? err.message : err}`);
+    console.error(`Manual cleanup: git worktree remove ${worktreePath} --force`);
+  }
+}
+
+/** Run all steps across all iterations, guaranteeing worktree cleanup on any exit path. */
 async function executeSteps(
   steps: readonly WorkflowStep[],
   ctx: StepContext,
   worktreePath: string | undefined,
-  cwd: string,
-): Promise<boolean> {
+  cwd: string, // original working dir (not the worktree) — used for git worktree removal
+): Promise<ExecutionResult> {
+  let completedIterations = 0;
   let failed = false;
   try {
-    for (const step of steps) {
-      if ((await runStep(step, ctx)) === "halt") {
-        failed = true;
-        break;
-      }
+    for (let iteration = 1; iteration <= ctx.loop.total; iteration++) {
+      ctx.loop = { ...ctx.loop, iteration };
+      failed = await runIteration(steps, ctx);
+      if (failed) break;
+      completedIterations = iteration;
     }
   } catch (err) {
     failed = true;
     console.error(`Workflow execution failed: ${err instanceof Error ? err.message : err}`);
   } finally {
-    if (worktreePath) {
-      try {
-        await removeWorktree(worktreePath, cwd);
-      } catch (err) {
-        console.error(`Failed to remove worktree: ${err instanceof Error ? err.message : err}`);
-        console.error(`Manual cleanup: git worktree remove ${worktreePath} --force`);
-      }
-    }
+    if (worktreePath) await cleanupWorktree(worktreePath, cwd);
   }
-  return failed;
+  return { failed, completedIterations };
 }
 
 /** Execute a workflow. */
@@ -293,6 +435,7 @@ export async function runWorkflow(options: RunOptions): Promise<RunResult> {
   const artifactDir = join(shakaHome, "runs", `${workflow.name}-${runId}`);
   const startedAt = new Date().toISOString();
   const useGit = workflow.state === "git-branch";
+  const totalIterations = workflow.loop;
   let branch: string | null = null;
   let worktreePath: string | undefined;
 
@@ -304,7 +447,7 @@ export async function runWorkflow(options: RunOptions): Promise<RunResult> {
     const setup = await setupGitBranch(branch, worktreePath, cwd);
     if (setup.error) {
       console.error(setup.error);
-      return failEarly(workflow.name, input, startedAt, artifactDir);
+      return failEarly(workflow.name, input, startedAt, artifactDir, totalIterations);
     }
   }
 
@@ -318,6 +461,7 @@ export async function runWorkflow(options: RunOptions): Promise<RunResult> {
     workflowName: workflow.name,
     useGit,
     totalSteps: workflow.steps.length,
+    loop: { iteration: 1, total: totalIterations },
     stepResults: [],
     stepMap: new Map(),
     onStepStart: options.onStepStart,
@@ -325,7 +469,12 @@ export async function runWorkflow(options: RunOptions): Promise<RunResult> {
     previousResult: null,
   };
 
-  const failed = await executeSteps(workflow.steps, ctx, worktreePath, cwd);
+  const { failed, completedIterations } = await executeSteps(
+    workflow.steps,
+    ctx,
+    worktreePath,
+    cwd,
+  );
 
   const metadata: RunMetadata = {
     workflow: workflow.name,
@@ -333,6 +482,8 @@ export async function runWorkflow(options: RunOptions): Promise<RunResult> {
     startedAt,
     branch,
     steps: ctx.stepResults,
+    totalIterations,
+    completedIterations,
     completedAt: new Date().toISOString(),
     status: failed ? "failed" : "completed",
   };

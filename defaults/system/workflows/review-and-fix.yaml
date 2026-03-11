@@ -1,4 +1,6 @@
 description: Review code changes and fix issues found
+# Override with --loop N for deeper refinement cycles.
+loop: 1
 steps:
   - name: review
     command: /code-review
