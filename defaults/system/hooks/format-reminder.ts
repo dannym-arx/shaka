@@ -6,8 +6,8 @@
  * from skills. No centralized registry needed.
  *
  * Architecture:
- * - Agents: SHAKA_HOME/agents/NAME.md with capability field in frontmatter
- * - Skills: SHAKA_HOME/skills/NAME/SKILL.md (thinking tools have key + include_when)
+ * - Agents: SHAKA_HOME/system/agents/NAME.md and SHAKA_HOME/customizations/agents/NAME.md
+ * - Skills: SHAKA_HOME/system/skills/NAME/SKILL.md and SHAKA_HOME/skills/NAME/SKILL.md
  * - Templates: SHAKA_HOME/system/templates/NAME.eta
  * - Inference: imported from shaka package
  */
@@ -88,18 +88,14 @@ function parseFrontmatter(content: string): Record<string, unknown> | null {
 }
 
 /**
- * Discover capabilities by scanning agent files
+ * Scan a single agents directory and merge results into the capabilities map.
+ * Later calls override earlier entries with the same capability key.
  */
-async function discoverCapabilities(): Promise<Capability[]> {
-  if (capabilitiesCache) return capabilitiesCache;
-
-  const capabilities = new Map<string, Capability>();
-  const agentsDir = join(SHAKA_HOME, "agents");
-
+async function scanAgentsDir(dir: string, capabilities: Map<string, Capability>): Promise<void> {
   try {
     const glob = new Bun.Glob("*.md");
-    for await (const file of glob.scan({ cwd: agentsDir })) {
-      const content = await Bun.file(join(agentsDir, file)).text();
+    for await (const file of glob.scan({ cwd: dir })) {
+      const content = await Bun.file(join(dir, file)).text();
       const meta = parseFrontmatter(content) as AgentMeta | null;
 
       if (meta?.capability && meta?.name) {
@@ -107,10 +103,8 @@ async function discoverCapabilities(): Promise<Capability[]> {
         const existing = capabilities.get(capKey);
 
         if (existing) {
-          // Add this agent to existing capability
           existing.agents += `, ${meta.name} (subagent_type=${meta.name})`;
         } else {
-          // Create new capability entry
           capabilities.set(capKey, {
             key: capKey,
             name: capitalize(capKey),
@@ -123,30 +117,39 @@ async function discoverCapabilities(): Promise<Capability[]> {
   } catch {
     // Directory doesn't exist or can't be read
   }
+}
+
+/**
+ * Discover capabilities by scanning agent files from both
+ * system/agents/ and customizations/agents/.
+ * Customization agents with the same capability key extend system ones.
+ */
+async function discoverCapabilities(): Promise<Capability[]> {
+  if (capabilitiesCache) return capabilitiesCache;
+
+  const capabilities = new Map<string, Capability>();
+
+  await scanAgentsDir(join(SHAKA_HOME, "system", "agents"), capabilities);
+  await scanAgentsDir(join(SHAKA_HOME, "customizations", "agents"), capabilities);
 
   capabilitiesCache = Array.from(capabilities.values());
   return capabilitiesCache;
 }
 
 /**
- * Discover thinking tools by scanning skills directory for SKILL.md files
- * with key and include_when fields in frontmatter
+ * Scan a single skills directory for SKILL.md files with thinking tool metadata.
+ * Later calls override earlier entries with the same key.
  */
-async function discoverThinkingTools(): Promise<ThinkingTool[]> {
-  if (thinkingToolsCache) return thinkingToolsCache;
-
-  const tools: ThinkingTool[] = [];
-  const skillsDir = join(SHAKA_HOME, "skills");
-
+async function scanSkillsDir(dir: string, toolsMap: Map<string, ThinkingTool>): Promise<void> {
   try {
     const glob = new Bun.Glob("*/SKILL.md");
-    for await (const file of glob.scan({ cwd: skillsDir })) {
-      const content = await Bun.file(join(skillsDir, file)).text();
+    for await (const file of glob.scan({ cwd: dir })) {
+      const content = await Bun.file(join(dir, file)).text();
       const meta = parseFrontmatter(content) as ThinkingToolMeta | null;
 
       // Only include skills that have key and include_when (thinking tools)
       if (meta?.key && meta?.name && meta?.include_when) {
-        tools.push({
+        toolsMap.set(meta.key, {
           key: meta.key,
           name: meta.name,
           description: meta.description || "",
@@ -157,8 +160,23 @@ async function discoverThinkingTools(): Promise<ThinkingTool[]> {
   } catch {
     // Directory doesn't exist or can't be read
   }
+}
 
-  thinkingToolsCache = tools;
+/**
+ * Discover thinking tools by scanning skills directories for SKILL.md files
+ * with key and include_when fields in frontmatter.
+ * Scans system/skills/ first, then installed skills/.
+ * Installed skills with the same key override system ones.
+ */
+async function discoverThinkingTools(): Promise<ThinkingTool[]> {
+  if (thinkingToolsCache) return thinkingToolsCache;
+
+  const toolsMap = new Map<string, ThinkingTool>();
+
+  await scanSkillsDir(join(SHAKA_HOME, "system", "skills"), toolsMap);
+  await scanSkillsDir(join(SHAKA_HOME, "skills"), toolsMap);
+
+  thinkingToolsCache = Array.from(toolsMap.values());
   return thinkingToolsCache;
 }
 

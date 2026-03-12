@@ -25,6 +25,7 @@ describe("ClaudeProviderConfigurer", () => {
     await mkdir(`${testShakaHome}/system/hooks`, { recursive: true });
     await mkdir(`${testShakaHome}/system/agents`, { recursive: true });
     await mkdir(`${testShakaHome}/system/skills`, { recursive: true });
+    await mkdir(`${testShakaHome}/skills`, { recursive: true });
 
     // Create a test hook with TRIGGER export (Shaka canonical names)
     await Bun.write(
@@ -458,6 +459,7 @@ console.log("custom");
       expect(result.hooks.ok).toBe(true);
       expect(result.agents.ok).toBe(true);
       expect(result.skills.ok).toBe(true);
+      expect(result.installedSkills.ok).toBe(true);
     });
 
     test("returns hooks not ok when settings.json missing", async () => {

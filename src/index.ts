@@ -188,12 +188,15 @@ import { createMemoryCommand } from "./commands/memory";
 import { createReloadCommand } from "./commands/reload";
 import { createRunCommand } from "./commands/run";
 import { createScanCommand } from "./commands/scan";
+import { createSkillCommand } from "./commands/skill";
 import { createUninstallCommand } from "./commands/uninstall";
 import { createUpdateCommand } from "./commands/update";
 import { getCurrentVersion } from "./domain/version";
+import { registerDefaultProviders } from "./services/skill-source";
 
 // CLI - only run when executed directly, not when imported as library
 if (import.meta.main) {
+  registerDefaultProviders();
   const program = new Command();
 
   program.name("shaka").description("Personal AI assistant framework").version(getCurrentVersion());
@@ -209,6 +212,7 @@ if (import.meta.main) {
   program.addCommand(createCommandsCommand());
   program.addCommand(createRunCommand());
   program.addCommand(createScanCommand());
+  program.addCommand(createSkillCommand());
 
   program.parse(process.argv);
 }

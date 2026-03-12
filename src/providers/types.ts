@@ -53,4 +53,5 @@ export interface InstallationStatus {
   agents: ComponentStatus;
   skills: ComponentStatus;
   commands: ComponentStatus;
+  installedSkills: ComponentStatus;
 }

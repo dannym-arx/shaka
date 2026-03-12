@@ -4,6 +4,23 @@ All notable changes to Shaka are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/). Versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.0] — 2026-03-12
+
+### Added
+
+- **Skill management** — Install, update, and remove third-party skills from GitHub or the Clawhub registry
+  - `shaka skill install user/repo` — install from GitHub (shorthand, full URL, or with `#ref`)
+  - `shaka skill install sonoscli` — install from Clawhub (bare name, or `name@version`)
+  - `shaka skill update [name]` — update one skill or all installed skills
+  - `shaka skill remove <name>` — remove an installed skill
+  - `shaka skill list` — list system and installed skills with their source
+  - `--github` and `--clawhub` flags to override auto-detection
+- **Security scanning on install** — Skills are scanned before installation for executable files, URLs, HTML comments, and invisible characters. Findings are presented for review before proceeding. Use `--yolo` to skip
+- **GitHub skill discovery** — Repos without a root `SKILL.md` are searched via fallback paths: marketplace metadata (`.claude-plugin/marketplace.json`), `.claude/skills/`, and `skills/` directories
+- **Clawhub registry** — HTTP-based skill source with version resolution and ZIP extraction
+- **Skill manifest** — Installed skills tracked in `skills.json` with source, provider, and version metadata
+- **Doctor integration** — `shaka doctor` now checks installed skill health
+
 ## [0.6.1] — 2026-03-11
 
 ### Added
@@ -274,6 +291,7 @@ Initial release. Core infrastructure for a provider-agnostic AI assistant framew
 - **E2E tests** — Docker-based end-to-end tests for both providers
 - **Unit tests** — 200+ tests covering core logic
 
+[0.7.0]: https://github.com/jgmontoya/shaka/compare/v0.6.1...v0.7.0
 [0.6.1]: https://github.com/jgmontoya/shaka/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/jgmontoya/shaka/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/jgmontoya/shaka/compare/v0.4.2...v0.5.0

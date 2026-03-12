@@ -2,15 +2,15 @@
  * Shared utilities for installing/uninstalling agents and skills.
  * Used by both Claude and OpenCode provider configurers.
  *
- * Both agents and skills use directory symlinks for consistency:
- * - Agents: ~/.config/opencode/agents/shaka/ → ${shakaHome}/system/agents/
- * - Skills: ~/.config/opencode/skills/shaka/ → ${shakaHome}/system/skills/
+ * Agents use a directory symlink for namespacing:
+ * - Agents: ~/.claude/agents/shaka/ → ${shakaHome}/system/agents/
  *
- * This means agent names include the "shaka/" prefix (e.g., "shaka/inference").
+ * Skills use per-skill symlinks so providers discover them as direct children:
+ * - Skills: ~/.claude/skills/Council/ → ${shakaHome}/system/skills/Council/
  */
 
-import { access, lstat, mkdir, symlink } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { access, lstat, mkdir, readdir, symlink } from "node:fs/promises";
+import { join, resolve, sep } from "node:path";
 import { readSymlinkTarget, removeLink } from "../platform/paths";
 import type { ComponentStatus } from "./types";
 
@@ -22,9 +22,14 @@ import type { ComponentStatus } from "./types";
  *
  * @param sourceDir - Path to source directory (e.g., ${shakaHome}/system/agents)
  * @param targetDir - Path to parent directory (e.g., ~/.claude/agents)
+ * @param linkName - Name of the symlink (default: "shaka")
  */
-async function installAssetSymlink(sourceDir: string, targetDir: string): Promise<void> {
-  const linkPath = join(targetDir, "shaka");
+async function installAssetSymlink(
+  sourceDir: string,
+  targetDir: string,
+  linkName = "shaka",
+): Promise<void> {
+  const linkPath = join(targetDir, linkName);
 
   // Check if source exists
   try {
@@ -63,9 +68,14 @@ async function installAssetSymlink(sourceDir: string, targetDir: string): Promis
  *
  * @param sourceDir - Path to source directory
  * @param targetDir - Path to parent directory
+ * @param linkName - Name of the symlink (default: "shaka")
  */
-async function uninstallAssetSymlink(sourceDir: string, targetDir: string): Promise<void> {
-  const linkPath = join(targetDir, "shaka");
+async function uninstallAssetSymlink(
+  sourceDir: string,
+  targetDir: string,
+  linkName = "shaka",
+): Promise<void> {
+  const linkPath = join(targetDir, linkName);
 
   try {
     // readlink works for both symlinks and Windows junctions
@@ -89,13 +99,15 @@ async function uninstallAssetSymlink(sourceDir: string, targetDir: string): Prom
  * @param sourceDir - Expected symlink target (e.g., ${shakaHome}/system/agents)
  * @param targetDir - Parent directory containing the symlink (e.g., ~/.claude/agents)
  * @param assetName - Human-readable name for error messages (e.g., "agents", "skills")
+ * @param linkName - Name of the symlink (default: "shaka")
  */
 export async function verifyAssetSymlink(
   sourceDir: string,
   targetDir: string,
   assetName: string,
+  linkName = "shaka",
 ): Promise<ComponentStatus> {
-  const linkPath = join(targetDir, "shaka");
+  const linkPath = join(targetDir, linkName);
 
   try {
     await lstat(linkPath);
@@ -120,4 +132,92 @@ export async function verifyAssetSymlink(
   }
 }
 
-export { installAssetSymlink, uninstallAssetSymlink };
+/**
+ * Install per-skill symlinks: for each subdirectory in sourceDir,
+ * create a symlink targetDir/<name> → sourceDir/<name>.
+ *
+ * Used for skills so each appears as a direct child of the provider's skills dir
+ * (e.g., ~/.claude/skills/Council/ → system/skills/Council/).
+ */
+async function installPerSkillSymlinks(sourceDir: string, targetDir: string): Promise<void> {
+  try {
+    await access(sourceDir);
+  } catch {
+    return;
+  }
+
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (entry.isDirectory()) {
+      await installAssetSymlink(join(sourceDir, entry.name), targetDir, entry.name);
+    }
+  }
+}
+
+/**
+ * Uninstall per-skill symlinks in targetDir that point into sourceDir.
+ * Only removes symlinks whose resolved target starts with the resolved sourceDir.
+ */
+async function uninstallPerSkillSymlinks(sourceDir: string, targetDir: string): Promise<void> {
+  try {
+    const entries = await readdir(targetDir, { withFileTypes: true });
+    const resolvedSource = resolve(sourceDir);
+
+    for (const entry of entries) {
+      const linkPath = join(targetDir, entry.name);
+      const currentTarget = await readSymlinkTarget(linkPath);
+      if (currentTarget !== null) {
+        const resolvedTarget = resolve(currentTarget);
+        if (
+          resolvedTarget === resolvedSource ||
+          resolvedTarget.startsWith(`${resolvedSource}${sep}`)
+        ) {
+          await removeLink(linkPath);
+        }
+      }
+    }
+  } catch {
+    // Target dir doesn't exist — nothing to uninstall
+  }
+}
+
+/**
+ * Verify per-skill symlinks exist for all subdirectories in sourceDir.
+ * Returns ok:true if all skills have correct symlinks (or sourceDir is empty/missing).
+ */
+async function verifyPerSkillSymlinks(
+  sourceDir: string,
+  targetDir: string,
+  assetName: string,
+): Promise<ComponentStatus> {
+  try {
+    await access(sourceDir);
+  } catch {
+    return { ok: true };
+  }
+
+  const entries = await readdir(sourceDir, { withFileTypes: true });
+  const skillDirs = entries.filter((e) => e.isDirectory());
+
+  if (skillDirs.length === 0) return { ok: true };
+
+  for (const entry of skillDirs) {
+    const result = await verifyAssetSymlink(
+      join(sourceDir, entry.name),
+      targetDir,
+      `${assetName} (${entry.name})`,
+      entry.name,
+    );
+    if (!result.ok) return result;
+  }
+
+  return { ok: true };
+}
+
+export {
+  installAssetSymlink,
+  uninstallAssetSymlink,
+  installPerSkillSymlinks,
+  uninstallPerSkillSymlinks,
+  verifyPerSkillSymlinks,
+};

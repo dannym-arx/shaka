@@ -70,9 +70,12 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 │   └── ...                   # Security logs, patterns (search TBD)
 │
 ├── customizations/           # Your OVERRIDES for system/
-│   └── base-reasoning-framework.md  # (example) Your reasoning variant
+│   ├── base-reasoning-framework.md  # (example) Your reasoning variant
 │   └── hooks/                      # Your hooks
-│   └── ...
+│
+├── skills/                   # Installed third-party skills (via `shaka skill install`)
+│
+├── skills.json               # Tracks installed skills (source, provider, version)
 │
 ├── system/ → <repo>/defaults/system  # Symlink to framework (replaced on upgrade)
 │   ├── base-reasoning-framework.md   # Default reasoning framework
@@ -109,6 +112,7 @@ For the rationale behind key structural decisions, see [Architecture Decisions](
 | `user/`           | Who you are (you write it)       | You   | Never touched     | Yes    |
 | `memory/`         | What Shaka learns (Shaka writes) | Shaka | Never touched     | Yes    |
 | `customizations/` | Your overrides for system/       | You   | Never touched     | Yes    |
+| `skills/`         | Installed third-party skills     | You   | Never touched     | Yes    |
 | `system/`         | Framework defaults (symlink)     | Shaka | Replaced entirely | No     |
 
 When Shaka upgrades, `system/` is re-symlinked to the new version. Everything else is preserved.
@@ -145,6 +149,10 @@ shaka commands list            # Show all commands and status
 shaka commands new <name>     # Create a new command
 shaka commands disable <name> # Disable a command
 shaka commands enable <name>  # Re-enable a disabled command
+shaka skill install <source>  # Install a skill (auto-detects GitHub or Clawhub)
+shaka skill remove <name>     # Remove an installed skill
+shaka skill update [name]     # Update one or all installed skills
+shaka skill list              # List system + installed skills
 shaka run <workflow> [input...] # Execute a multi-step workflow
 shaka scan <file>             # Scan prose for AI writing patterns (slop)
 shaka scan --dir <path>       # Scan all .md files in a directory
@@ -392,6 +400,34 @@ Domain containers for complex workflows. A skill is a **folder** with a `SKILL.m
 | WritingRules    | Anti-slop prose constraints + `shaka scan`    |
 
 Skills are invoked by context ("review this PR") or explicitly ("use the code-review skill").
+
+**Installing skills:**
+
+Skills can be installed from GitHub repositories or the Clawhub registry. The source is auto-detected based on input format:
+
+```bash
+# GitHub (auto-detected when input contains /)
+shaka skill install user/repo              # Shorthand
+shaka skill install user/repo#v1.0.0       # Specific ref
+shaka skill install https://github.com/user/skill-repo
+shaka skill install https://github.com/user/repo/tree/main/skills/my-skill
+
+# Clawhub (auto-detected for bare words without /)
+shaka skill install sonoscli               # Latest version
+shaka skill install sonoscli@1.2.0         # Specific version
+
+# Explicit provider override
+shaka skill install my-skill --github      # Force GitHub provider
+shaka skill install my-skill --clawhub     # Force Clawhub provider
+shaka skill install my-skill --clawdhub    # Legacy alias (deprecated)
+
+# Security options
+shaka skill install user/repo --yolo       # Skip security checks and prompt
+```
+
+GitHub repos without a root `SKILL.md` are discovered via fallback paths: marketplace metadata (`.claude-plugin/marketplace.json`), Claude layout (`.claude/skills/<name>/SKILL.md`), and plugin-style `skills/<name>/SKILL.md`.
+
+Installed skills live in `skills/` and are automatically symlinked to provider config directories. A security scan flags any executable files (`.ts`, `.js`, `.sh`, etc.) before installation — skills should be markdown-only.
 
 ### Agents
 
