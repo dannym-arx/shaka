@@ -35,6 +35,10 @@ delve, tapestry, testament, pivotal, multifaceted, realm, landscape (metaphorica
 
 robust, crucial, vital, seamless, comprehensive, innovative, cutting-edge, revolutionary, unparalleled, meticulous, compelling, intricate, vibrant, quiet (as descriptor), nuanced
 
+### Magic Adverbs
+
+deeply, fundamentally, remarkably, arguably, quietly (when conveying subtle importance)
+
 ### Corporate Buzzwords
 
 leverage, utilize, synergy, ecosystem, paradigm, stakeholder, holistic, proactive, empower, foster, facilitate, optimize, streamline, game-changing, best-in-class
@@ -56,6 +60,10 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "Dive into"
 - "Let's explore"
 - "Join us as we"
+- "Imagine a world where..."
+- "Let's break this down"
+- "Let's unpack this"
+- "Let's dive in"
 
 ### Transition Zombies
 
@@ -64,14 +72,23 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "Additionally,"
 - "In summary,"
 - "In conclusion,"
+- "To sum up,"
 - "In essence,"
 - "It's important to note"
 - "It's worth noting"
 - "It bears mentioning"
+- "Notably,"
+- "Interestingly,"
+- "Importantly,"
 - "Let's be clear"
 - "To be clear"
 - "Make no mistake"
 - "Certainly!"
+- "Here's the kicker"
+- "Here's the thing"
+- "Here's where it gets interesting"
+- "Here's what most people miss"
+- "Here's the deal"
 
 ### Empty Emphasis
 
@@ -80,30 +97,73 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "The bottom line is"
 - "The reality is"
 - "The truth is"
+- "The reality is simpler"
+- "History is unambiguous"
+- "History is clear"
 - "And that's a [adjective] thing"
 - "marks a shift"
 - "represents a breakthrough"
+- "will define the next era"
+- "fundamentally reshape how we think"
+- "something entirely new"
 
 ### Fake Depth
 
 - "serves as" (when "is" works)
+- "stands as"
 - "highlights the importance of"
 - "underscores the need for"
 - "reflects the growing"
 - "showcases the potential"
 - "demonstrates the value"
+- "contributing to [heritage/culture/legacy]"
+- "Think of it as..." / "Think of it like..."
+- "It's like a [analogy] for [concept]" (when the analogy is less clear than the concept)
+- "Experts argue that" (without naming the expert)
+- "Industry reports suggest" (without naming the report)
+- "Observers have cited" (without naming anyone)
+- "Despite these challenges, [optimistic conclusion]"
+- "Despite its [positive word], [subject] faces challenges"
 
 ---
 
 ## Structural Patterns to Avoid
 
-**Rule of Three:** Don't string three adjectives together. Pick the most accurate single descriptor.
+**Rule of Three:** Don't string three adjectives together. Pick the most accurate single descriptor. One tricolon can be effective; multiple back-to-back tricolons is a pattern failure.
 
 **Hourglass Structure:** Don't open broad, narrow to specifics, close broad. Instead: direct statement, evidence, conclusion.
 
 **Even Paragraphing:** Vary paragraph length based on content needs.
 
 **Same Sentence Rhythm:** Mix short punchy claims with complex constructions. Don't repeat subject-verb-object.
+
+**Short Punchy Fragments:** Don't use very short sentences or fragments as standalone paragraphs for manufactured emphasis. "He published this. Openly. In a book." is not a writing style; it's a tic.
+
+**Negative Parallelism:** Avoid "It's not X, it's Y" and its variants: "not because X, but because Y", "The question isn't X. The question is Y." One per piece might work. Ten per piece insults the reader.
+
+**Dramatic Countdown:** Don't negate two things to reveal a third: "Not a bug. Not a feature. A design flaw." State the point directly.
+
+**Rhetorical Self-Q&A:** Don't pose questions nobody asked and immediately answer them for dramatic effect: "The result? Devastating." If the point needs setup, write the setup.
+
+**Anaphora Abuse:** Don't repeat the same sentence opening multiple times in succession. "They assume X... They assume Y... They assume Z..." is exhausting.
+
+**Listicle in a Trench Coat:** Don't disguise a numbered list as prose by writing "The first... The second... The third..." Write connected prose or use an actual list, not both at once.
+
+**Fractal Summaries:** Don't summarize at every level. No "In this section we'll explore..." intros, no section-closing recaps, no conclusion that restates everything already said.
+
+**Dead Metaphor Repetition:** Introduce a metaphor, use it once or twice, move on. Don't repeat the same metaphor 5-10 times across a piece.
+
+**Historical Analogy Stacking:** Don't rapid-fire list historical companies or tech revolutions to build authority: "Apple didn't build Uber. Facebook didn't build Spotify..." Pick one example and make it land.
+
+**One-Point Dilution:** Don't restate a single argument 10 different ways across thousands of words. Make the point, support it, move on.
+
+**Signposted Conclusion:** Don't announce the conclusion with "In conclusion," or "To sum up,". The reader can feel the ending; they don't need a sign.
+
+**False Ranges:** Don't use "from X to Y" when X and Y aren't on a real spectrum with a meaningful middle. "From innovation to cultural transformation" -- what's in between? Nothing.
+
+**False Vulnerability:** Don't simulate self-awareness with polished, risk-free admissions: "And yes, I'll admit I'm biased here." Real vulnerability is specific and uncomfortable.
+
+**Invented Concept Labels:** Don't coin compound labels that sound analytical but aren't established terms ("supervision paradox", "acceleration trap", "workload creep") and treat them as rigorous definitions. Name the thing plainly or define it explicitly.
 
 ---
 
@@ -114,6 +174,8 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "less about X, more about Y"
 - "It's not just X, it's Y"
 - "Not only...but also"
+- "Not X. Not Y. Just Z."
+- "X, not Y" (dismissal construction)
 
 ---
 
@@ -125,13 +187,17 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 
 **Hedging:** Make direct claims.
 
-**Generic Attribution:** Cite specific sources or omit.
+**Generic Attribution:** Cite specific sources or omit. "Experts argue" without naming one is not a citation; it's a placeholder.
+
+**Bold-First Bullets:** Don't start every bullet with a bolded phrase. It's a formatting tic, not a style choice. Use bold only when the word itself is the point.
+
+**Unicode Decoration:** Use plain ASCII. No -> arrows, no curly/smart quotes. Write -> as "to" or use a plain hyphen. These characters signal unedited AI output.
 
 ---
 
 ## Punctuation
 
-Use straight quotes and straight apostrophes, not curly. Limit em dash usage.
+Use straight quotes and straight apostrophes, not curly. No em dashes. They have become AI slop. Use a comma, a colon, parentheses, or restructure the sentence.
 
 ---
 

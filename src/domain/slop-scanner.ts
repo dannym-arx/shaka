@@ -111,6 +111,24 @@ const CARDINAL_SINS: PatternDef[] = [
     name: "not just X, but Y",
     suggestion: "State the positive directly",
   },
+  {
+    // "It's not X, it's Y" / "It's not X — it's Y"
+    pattern: /\bit'?s not\b[^.!?]{1,60},\s*it'?s\b/gi,
+    name: "It's not X, it's Y (negative parallelism)",
+    suggestion: "State the positive directly",
+  },
+  {
+    // "The question isn't X. The question is Y." / "The problem isn't..."
+    pattern: /\bthe \w+ isn'?t\b/gi,
+    name: "The X isn't... (negative reframe)",
+    suggestion: "State what it IS, not what it isn't",
+  },
+  {
+    // "Not a bug. Not a feature. A design flaw." — dramatic countdown
+    pattern: /\bNot [^.!?]{1,40}\.\s+Not [^.!?]{1,40}\.\s+/g,
+    name: "Not X. Not Y. (dramatic countdown)",
+    suggestion: "State the point directly",
+  },
 ];
 
 const BANNED_WORDS: Map<string, string> = new Map([
@@ -167,7 +185,9 @@ const BANNED_WORDS: Map<string, string> = new Map([
   ["importantly", "be specific or delete"],
   ["essentially", "be specific or delete"],
   ["fundamentally", "be specific"],
-  // Tier 5: Additional AI tells
+  // Tier 5: Magic adverbs
+  ["deeply", "be specific about how or why"],
+  // Tier 6: Additional AI tells
   ["genuine", "real, actual"],
   ["straightforward", "simple, direct"],
   ["unlock", "enable, reveal"],
@@ -200,6 +220,16 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
   },
   { pattern: /\bThe reality is\b/gi, name: "The reality is", suggestion: "State the reality" },
   { pattern: /\bThe truth is\b/gi, name: "The truth is", suggestion: "State the truth" },
+  {
+    pattern: /\bThe reality is simpler\b/gi,
+    name: "The reality is simpler",
+    suggestion: "If it's simpler, just state it simply",
+  },
+  {
+    pattern: /\bHistory is (unambiguous|clear)\b/gi,
+    name: "History is unambiguous/clear",
+    suggestion: "Cite the specific evidence instead",
+  },
   { pattern: /\bMake no mistake\b/gi, name: "Make no mistake", suggestion: "Delete" },
   { pattern: /\bLet's be clear\b/gi, name: "Let's be clear", suggestion: "Delete" },
   { pattern: /\bTo be clear\b/gi, name: "To be clear", suggestion: "Delete" },
@@ -217,8 +247,8 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
     suggestion: "Delete throat-clearing",
   },
   {
-    pattern: /\bLet's (explore|dive|delve|examine)\b/gi,
-    name: "Let's explore...",
+    pattern: /\bLet's (explore|dive|delve|examine|break|unpack)\b/gi,
+    name: "Let's explore/break down/unpack...",
     suggestion: "Just do it",
   },
   {
@@ -235,6 +265,74 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
     pattern: /\bContrary to popular belief\b/gi,
     name: "Contrary to popular belief",
     suggestion: "State your view",
+  },
+  {
+    pattern: /\bHere's the (kicker|thing|deal)\b/gi,
+    name: "Here's the kicker/thing/deal",
+    suggestion: "Delete the buildup, state the point",
+  },
+  {
+    pattern: /\bHere's where it gets (interesting|complicated|tricky)\b/gi,
+    name: "Here's where it gets interesting",
+    suggestion: "Delete the buildup, state the point",
+  },
+  {
+    pattern: /\bHere's what (most people|many people) (miss|don't|overlook)\b/gi,
+    name: "Here's what most people miss",
+    suggestion: "State the insight directly",
+  },
+  {
+    pattern: /\bImagine a world where\b/gi,
+    name: "Imagine a world where",
+    suggestion: "State what you're arguing for directly",
+  },
+  {
+    pattern: /\bThink of it (as|like)\b/gi,
+    name: "Think of it as/like (patronizing analogy)",
+    suggestion: "Explain it directly; use an analogy only if clearer than the original",
+  },
+  {
+    pattern: /\bIn conclusion[,\s]/gi,
+    name: "In conclusion",
+    suggestion: "Delete — the reader knows it's ending",
+  },
+  {
+    pattern: /\bTo sum up[,\s]/gi,
+    name: "To sum up",
+    suggestion: "Delete — the reader knows it's ending",
+  },
+  {
+    pattern: /\bIn summary[,\s]/gi,
+    name: "In summary",
+    suggestion: "Delete or restructure",
+  },
+  {
+    pattern: /\bDespite (its|these|their|the) (challenges|limitations|drawbacks|hurdles)/gi,
+    name: "Despite its/these challenges",
+    suggestion: "Don't acknowledge-then-dismiss; address the limitation directly or omit it",
+  },
+  {
+    // "will define the next era / decade / generation"
+    pattern: /\bwill define the next (era|decade|generation|chapter)\b/gi,
+    name: "will define the next era (stakes inflation)",
+    suggestion: "Be specific about what will actually change",
+  },
+  {
+    pattern: /\bfundamentally reshape\b/gi,
+    name: "fundamentally reshape (stakes inflation)",
+    suggestion: "Describe the specific change",
+  },
+  {
+    // "And yes, I'll admit / And yes, I'm openly..."
+    pattern: /\bAnd yes,?\s+I('ll| will| am|'m) (admit|openly|honestly)\b/gi,
+    name: "And yes, I'll admit (false vulnerability)",
+    suggestion: "Be specific and genuinely uncertain, or delete",
+  },
+  {
+    // "The result? Devastating." / "The worst part? Nobody saw it coming."
+    pattern: /\b\w[\w\s]{0,30}\?\s+[A-Z][^.!?]{1,60}[.!]/g,
+    name: "Rhetorical Q&A (The result? X.)",
+    suggestion: "Integrate the point into the preceding sentence",
   },
 ];
 
@@ -281,6 +379,7 @@ const AI_TELL_PATTERNS: PatternDef[] = [
     suggestion: "State the point directly",
   },
   { pattern: /\bserves as a?\b/gi, name: "serves as (use 'is')", suggestion: "Use 'is' instead" },
+  { pattern: /\bstands as a?\b/gi, name: "stands as (use 'is')", suggestion: "Use 'is' instead" },
   { pattern: /\bacts as a?\b/gi, name: "acts as (use 'is')", suggestion: "Use 'is' instead" },
   {
     pattern: /\bfunctions as a?\b/gi,
@@ -591,6 +690,20 @@ function scanForAiTells(content: string): Violation[] {
       text: "Smart/curly quote detected",
       context: getContext(content, match.index ?? 0, match[0].length),
       suggestion: "Use straight quotes only",
+    });
+  }
+
+  // Unicode arrows (→, ⟶, ➜, ➡, etc.)
+  for (const match of content.matchAll(/[\u2192\u27F6\u279C\u27A1\u2794\u21D2]/g)) {
+    const { line, column } = getLineAndColumn(content, match.index ?? 0);
+    violations.push({
+      type: "ai_tell",
+      severity: "medium",
+      line,
+      column,
+      text: "Unicode arrow detected",
+      context: getContext(content, match.index ?? 0, match[0].length),
+      suggestion: 'Use "to", a plain hyphen, or rewrite the sentence',
     });
   }
 
