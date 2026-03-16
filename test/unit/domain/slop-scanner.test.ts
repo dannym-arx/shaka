@@ -169,6 +169,74 @@ describe("slop-scanner", () => {
       expect(result.wordCount).toBeGreaterThan(0);
     });
 
+    describe("negative parallelism cardinal sin", () => {
+      test("flags 'It's not X, it's Y' pattern", () => {
+        const result = scanContent(
+          "It's not a bug, it's a feature. It's not slow, it's thoughtful.",
+          "parallelism.md",
+        );
+        const sins = result.violations.filter(
+          (v) => v.type === "cardinal_sin" && v.text.toLowerCase().includes("it"),
+        );
+        expect(sins.length).toBeGreaterThanOrEqual(1);
+        expect(sins[0]?.suggestion).toBe("State the positive directly");
+      });
+
+      test("does not flag factual negations with 'it'", () => {
+        const result = scanContent(
+          "It's not raining outside. It's not worth the risk.",
+          "not-parallelism.md",
+        );
+        // "It's not raining" has no ", it's" continuation so should not fire
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+    });
+
+    describe("negative reframe cardinal sin", () => {
+      test("flags reframing nouns: question, problem, issue", () => {
+        const result = scanContent(
+          "The question isn't whether to ship. The problem isn't the budget.",
+          "reframe.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins.length).toBeGreaterThanOrEqual(2);
+        expect(sins[0]?.suggestion).toBe("State what it IS, not what it isn't");
+      });
+
+      test("does not flag factual negations like 'The car isn't running'", () => {
+        const result = scanContent(
+          "The car isn't running. The test isn't passing. The button isn't responding.",
+          "not-reframe.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+    });
+
+    describe("dramatic countdown cardinal sin", () => {
+      test("flags 'Not X. Not Y.' countdown pattern", () => {
+        const result = scanContent(
+          "Not a bug. Not a feature. A fundamental design flaw that nobody wanted to address.",
+          "countdown.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins.length).toBeGreaterThanOrEqual(1);
+        expect(sins[0]?.suggestion).toBe("State the point directly");
+      });
+
+      test("does not flag a single 'Not X.' sentence", () => {
+        const result = scanContent(
+          "Not all configurations require this setting.",
+          "not-countdown.md",
+        );
+        const sins = result.violations.filter(
+          (v) => v.type === "cardinal_sin" && v.suggestion === "State the point directly",
+        );
+        expect(sins).toHaveLength(0);
+      });
+    });
+
     test("score does not go below 0", () => {
       // Pack as many violations as possible into a short text
       const result = scanContent(

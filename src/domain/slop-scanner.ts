@@ -118,8 +118,9 @@ const CARDINAL_SINS: PatternDef[] = [
     suggestion: "State the positive directly",
   },
   {
-    // "The question isn't X. The question is Y." / "The problem isn't..."
-    pattern: /\bthe \w+ isn'?t\b/gi,
+    // "The question isn't X." / "The problem isn't X." — reframing nouns only, not factual negations
+    pattern:
+      /\bthe\s+(?:problem|issue|question|challenge|fault|reason|point|goal|aim|purpose)\s+isn'?t\b/gi,
     name: "The X isn't... (negative reframe)",
     suggestion: "State what it IS, not what it isn't",
   },
@@ -330,7 +331,9 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
   },
   {
     // "The result? Devastating." / "The worst part? Nobody saw it coming."
-    pattern: /\b\w[\w\s]{0,30}\?\s+[A-Z][^.!?]{1,60}[.!]/g,
+    // Restricted to known rhetorical openers to avoid flagging legitimate technical Q&A.
+    pattern:
+      /\bThe\s+(?:result|answer|outcome|worst part|best part|kicker|catch|problem|twist|surprise|irony|truth|reality)\?\s+[A-Z][^.!?]{1,60}[.!]/g,
     name: "Rhetorical Q&A (The result? X.)",
     suggestion: "Integrate the point into the preceding sentence",
   },
