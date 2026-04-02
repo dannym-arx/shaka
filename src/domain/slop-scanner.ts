@@ -130,6 +130,21 @@ const CARDINAL_SINS: PatternDef[] = [
     name: "Not X. Not Y. (dramatic countdown)",
     suggestion: "State the point directly",
   },
+  {
+    pattern: /\bnot because\s+[^.]+\.\s*because\b/gi,
+    name: "Not because X. Because Y.",
+    suggestion: "State Y directly",
+  },
+  {
+    pattern: /\bisn't the problem\.\s*\w+\s+is\b/gi,
+    name: "X isn't the problem. Y is.",
+    suggestion: "State the problem directly",
+  },
+  {
+    pattern: /\bit feels like\s+[^.]+\.\s*it's actually\b/gi,
+    name: "It feels like X. It's actually Y.",
+    suggestion: "State Y directly",
+  },
 ];
 
 const BANNED_WORDS: Map<string, string> = new Map([
@@ -190,6 +205,9 @@ const BANNED_WORDS: Map<string, string> = new Map([
   ["deeply", "be specific about how or why"],
   // Tier 6: Additional AI tells
   ["genuine", "real, actual"],
+  ["genuinely", "delete or be specific"],
+  ["honestly", "delete"],
+  ["literally", "delete or be specific"],
   ["straightforward", "simple, direct"],
   ["unlock", "enable, reveal"],
   ["navigate", "handle, manage"],
@@ -206,6 +224,7 @@ const BANNED_WORDS: Map<string, string> = new Map([
   ["instructive", "useful, informative"],
   ["leveraging", "using, applying"],
   ["leveraged", "used, applied"],
+  ["unpack", "explain"],
 ]);
 
 const BANNED_CONSTRUCTIONS: PatternDef[] = [
@@ -283,6 +302,11 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
     suggestion: "State the insight directly",
   },
   {
+    pattern: /\bHere's what I mean\b/gi,
+    name: "Here's what I mean",
+    suggestion: "Delete, state the point",
+  },
+  {
     pattern: /\bImagine a world where\b/gi,
     name: "Imagine a world where",
     suggestion: "State what you're arguing for directly",
@@ -291,6 +315,11 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
     pattern: /\bThink of it (as|like)\b/gi,
     name: "Think of it as/like (patronizing analogy)",
     suggestion: "Explain it directly; use an analogy only if clearer than the original",
+  },
+  {
+    pattern: /\bThink about it\b/gi,
+    name: "Think about it",
+    suggestion: "Delete",
   },
   {
     pattern: /\bIn conclusion[,\s]/gi,
@@ -336,6 +365,26 @@ const BANNED_CONSTRUCTIONS: PatternDef[] = [
       /\bThe\s+(?:result|answer|outcome|worst part|best part|kicker|catch|problem|twist|surprise|irony|truth|reality)\?\s+[A-Z][^.!?]{1,60}[.!]/g,
     name: "Rhetorical Q&A (The result? X.)",
     suggestion: "Integrate the point into the preceding sentence",
+  },
+  {
+    pattern: /\bFull stop\b/gi,
+    name: "Full stop",
+    suggestion: "Delete",
+  },
+  {
+    pattern: /\bLet that sink in\b/gi,
+    name: "Let that sink in",
+    suggestion: "Delete",
+  },
+  {
+    pattern: /\bAnd that's okay\b/gi,
+    name: "And that's okay",
+    suggestion: "Delete",
+  },
+  {
+    pattern: /\blean into\b/gi,
+    name: "lean into",
+    suggestion: "accept, embrace",
   },
 ];
 
@@ -423,6 +472,38 @@ const AI_TELL_PATTERNS: PatternDef[] = [
     pattern: /\bNot only\b[^.]*\bbut also\b/gi,
     name: "Not only...but also",
     suggestion: "State both points directly",
+  },
+  // False agency: inanimate objects performing human actions
+  {
+    pattern: /\bthe data tells\b/gi,
+    name: "false agency: the data tells",
+    suggestion: "Name who analyzed the data",
+  },
+  {
+    pattern: /\bthe (market|industry) rewards\b/gi,
+    name: "false agency: the market rewards",
+    suggestion: "Name who pays or benefits",
+  },
+  {
+    pattern: /\bthe (conversation|discussion) moves\b/gi,
+    name: "false agency: the conversation moves",
+    suggestion: "Name who steered it",
+  },
+  {
+    pattern: /\bthe (decision|answer) emerges\b/gi,
+    name: "false agency: the decision emerges",
+    suggestion: "Name who decided",
+  },
+  {
+    pattern: /\bthe culture shifts\b/gi,
+    name: "false agency: the culture shifts",
+    suggestion: "Name who changed behavior",
+  },
+  // Dramatic fragmentation
+  {
+    pattern: /That's it\.\s*That's the\b/gi,
+    name: "dramatic fragmentation",
+    suggestion: "Write a complete sentence",
   },
 ];
 

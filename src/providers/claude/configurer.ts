@@ -195,8 +195,14 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
         join(this.claudeHome, "agents"),
       );
 
-      // System skills: directory symlink (original behavior)
-      await installAssetSymlink(
+      // Clean up legacy single-directory symlink (shaka → system/skills/) if present
+      await uninstallAssetSymlink(
+        join(config.shakaHome, "system", "skills"),
+        join(this.claudeHome, "skills"),
+      );
+
+      // System skills: per-skill symlinks so providers discover each as a direct child
+      await installPerSkillSymlinks(
         join(config.shakaHome, "system", "skills"),
         join(this.claudeHome, "skills"),
       );
@@ -352,7 +358,13 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
         join(config.shakaHome, "system", "agents"),
         join(this.claudeHome, "agents"),
       );
+      // Clean up legacy single-directory symlink if present
       await uninstallAssetSymlink(
+        join(config.shakaHome, "system", "skills"),
+        join(this.claudeHome, "skills"),
+      );
+      // Remove per-skill symlinks for system skills
+      await uninstallPerSkillSymlinks(
         join(config.shakaHome, "system", "skills"),
         join(this.claudeHome, "skills"),
       );
@@ -376,10 +388,10 @@ export class ClaudeProviderConfigurer implements ProviderConfigurer {
       join(this.claudeHome, "agents"),
       "agents",
     );
-    const skills = await verifyAssetSymlink(
+    const skills = await verifyPerSkillSymlinks(
       join(config.shakaHome, "system", "skills"),
       join(this.claudeHome, "skills"),
-      "skills",
+      "system skills",
     );
     const installedSkills = await verifyPerSkillSymlinks(
       join(config.shakaHome, "skills"),

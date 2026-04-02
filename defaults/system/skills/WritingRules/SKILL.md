@@ -45,7 +45,7 @@ leverage, utilize, synergy, ecosystem, paradigm, stakeholder, holistic, proactiv
 
 ### Vague Intensifiers
 
-significantly, substantially, considerably, notably, remarkably, particularly, especially, importantly, essentially, fundamentally
+significantly, substantially, considerably, notably, remarkably, particularly, especially, importantly, essentially, fundamentally, genuinely, honestly, literally
 
 ---
 
@@ -106,6 +106,8 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "will define the next era"
 - "fundamentally reshape how we think"
 - "something entirely new"
+- "Full stop."
+- "Let that sink in."
 
 ### Fake Depth
 
@@ -125,6 +127,17 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "Despite these challenges, [optimistic conclusion]"
 - "Despite its [positive word], [subject] faces challenges"
 
+### Rhetorical Setups
+
+- "What if [reframe]?"
+- "Here's what I mean:"
+- "Here's the thing:"
+- "Think about it:"
+- "And that's okay."
+- "I promise"
+
+These announce insight instead of delivering it. Make the point. Let readers draw conclusions.
+
 ---
 
 ## Structural Patterns to Avoid
@@ -138,6 +151,8 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 **Same Sentence Rhythm:** Mix short punchy claims with complex constructions. Don't repeat subject-verb-object.
 
 **Short Punchy Fragments:** Don't use very short sentences or fragments as standalone paragraphs for manufactured emphasis. "He published this. Openly. In a book." is not a writing style; it's a tic.
+
+**Dramatic Fragmentation:** Don't use sentence fragments for manufactured profundity. "X. That's it. That's the thing." and "This unlocks something. Freedom." are presentation tricks. Write complete sentences.
 
 **Negative Parallelism:** Avoid "It's not X, it's Y" and its variants: "not because X, but because Y", "The question isn't X. The question is Y." One per piece might work. Ten per piece insults the reader.
 
@@ -176,6 +191,11 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 - "Not only...but also"
 - "Not X. Not Y. Just Z."
 - "X, not Y" (dismissal construction)
+- "Not because X. Because Y."
+- "X isn't the problem. Y is."
+- "It feels like X. It's actually Y."
+
+State Y directly. Drop the negation.
 
 ---
 
@@ -192,6 +212,26 @@ significantly, substantially, considerably, notably, remarkably, particularly, e
 **Bold-First Bullets:** Don't start every bullet with a bolded phrase. It's a formatting tic, not a style choice. Use bold only when the word itself is the point.
 
 **Unicode Decoration:** Use plain ASCII. No -> arrows, no curly/smart quotes. Write -> as "to" or use a plain hyphen. These characters signal unedited AI output.
+
+**False Agency:** Don't give inanimate objects human verbs. AI does this to avoid naming actors.
+
+| Slop | Fix |
+| --- | --- |
+| "a complaint becomes a fix" | "the team fixed it that week" |
+| "the decision emerges" | "the lead decided" |
+| "the data tells us" | "we read the data and concluded" |
+| "the culture shifts" | "people changed how they worked" |
+| "the market rewards" | "buyers pay for it" |
+
+Name the human. If no specific person fits, use "you."
+
+**Narrator-from-a-Distance:** Don't float above the scene like a documentarian. Put the reader in the room.
+
+| Slop | Fix |
+| --- | --- |
+| "Nobody designed this." | "You don't sit down one day and decide to..." |
+| "This happens because..." | "You hit this when..." |
+| "People tend to..." | "You'll find that..." |
 
 ---
 
@@ -222,6 +262,25 @@ Use straight quotes and straight apostrophes, not curly. No em dashes. They have
 | tapestry      | mix, combination     |
 | pivotal       | important, key       |
 | crucial       | important, necessary |
+| navigate      | handle               |
+| unpack        | explain              |
+| lean into     | accept, embrace      |
+
+---
+
+## Examples
+
+**Before:** Here's the thing: what makes great documentation isn't just clarity, it's empathy. The conversation shifts when teams genuinely start to lean into user feedback. And that's a good thing.
+
+**After:** Great documentation explains things from the reader's position. Teams that read user feedback write better docs.
+
+**Before:** The implications are significant. This fundamentally represents a breakthrough in how organizations navigate the complexities of distributed systems.
+
+**After:** Distributed systems got easier to run. Here's what changed.
+
+**Before:** Nobody designed this system to fail. It happens because people tend to optimize for speed, not resilience. Not always. Not perfectly. But consistently.
+
+**After:** You build for speed because the deadline is Friday. Resilience gets cut from the sprint. The system breaks under load and you spend the weekend fixing it.
 
 ---
 

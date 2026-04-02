@@ -82,8 +82,14 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
         join(this.opencodeConfigDir, "agents"),
       );
 
-      // System skills: directory symlink (original behavior)
-      await installAssetSymlink(
+      // Clean up legacy single-directory symlink (shaka → system/skills/) if present
+      await uninstallAssetSymlink(
+        join(config.shakaHome, "system", "skills"),
+        join(this.opencodeConfigDir, "skills"),
+      );
+
+      // System skills: per-skill symlinks so providers discover each as a direct child
+      await installPerSkillSymlinks(
         join(config.shakaHome, "system", "skills"),
         join(this.opencodeConfigDir, "skills"),
       );
@@ -152,7 +158,13 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
         join(config.shakaHome, "system", "agents"),
         join(this.opencodeConfigDir, "agents"),
       );
+      // Clean up legacy single-directory symlink if present
       await uninstallAssetSymlink(
+        join(config.shakaHome, "system", "skills"),
+        join(this.opencodeConfigDir, "skills"),
+      );
+      // Remove per-skill symlinks for system skills
+      await uninstallPerSkillSymlinks(
         join(config.shakaHome, "system", "skills"),
         join(this.opencodeConfigDir, "skills"),
       );
@@ -176,10 +188,10 @@ export class OpencodeProviderConfigurer implements ProviderConfigurer {
       join(this.opencodeConfigDir, "agents"),
       "agents",
     );
-    const skills = await verifyAssetSymlink(
+    const skills = await verifyPerSkillSymlinks(
       join(config.shakaHome, "system", "skills"),
       join(this.opencodeConfigDir, "skills"),
-      "skills",
+      "system skills",
     );
     const installedSkills = await verifyPerSkillSymlinks(
       join(config.shakaHome, "skills"),
