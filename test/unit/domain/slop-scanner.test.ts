@@ -91,6 +91,21 @@ describe("slop-scanner", () => {
       expect(smartQuotes.length).toBeGreaterThanOrEqual(2);
     });
 
+    test("detects Unicode arrows", () => {
+      const result = scanContent(
+        "Click here \u2192 to continue, then \u21D2 profit.",
+        "arrows.md",
+      );
+      const arrows = result.violations.filter((v) => v.text === "Unicode arrow detected");
+      expect(arrows.length).toBe(2);
+      expect(arrows[0].type).toBe("ai_tell");
+      expect(arrows[0].suggestion).toBe('Use "to", a plain hyphen, or rewrite the sentence');
+      expect(arrows[0].line).toBe(1);
+      expect(arrows[0].column).toBe(12);
+      expect(arrows[1].line).toBe(1);
+      expect(arrows[1].column).toBe(32);
+    });
+
     test("heavily sloppy content fails review", () => {
       const result = scanContent(
         "In today's rapidly evolving digital landscape, we must leverage robust and seamless solutions " +
