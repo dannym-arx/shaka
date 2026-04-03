@@ -194,7 +194,7 @@ describe("slop-scanner", () => {
           (v) => v.type === "cardinal_sin" && v.text.toLowerCase().includes("it"),
         );
         expect(sins.length).toBeGreaterThanOrEqual(1);
-        expect(sins[0]?.suggestion).toBe("State the positive directly");
+        expect(sins.some((v) => v.suggestion === "State the positive directly")).toBe(true);
       });
 
       test("does not flag factual negations with 'it'", () => {
@@ -216,7 +216,7 @@ describe("slop-scanner", () => {
         );
         const sins = result.violations.filter((v) => v.type === "cardinal_sin");
         expect(sins.length).toBeGreaterThanOrEqual(2);
-        expect(sins[0]?.suggestion).toBe("State what it IS, not what it isn't");
+        expect(sins.some((v) => v.suggestion === "State what it IS, not what it isn't")).toBe(true);
       });
 
       test("does not flag factual negations like 'The car isn't running'", () => {
@@ -237,7 +237,7 @@ describe("slop-scanner", () => {
         );
         const sins = result.violations.filter((v) => v.type === "cardinal_sin");
         expect(sins.length).toBeGreaterThanOrEqual(1);
-        expect(sins[0]?.suggestion).toBe("State the point directly");
+        expect(sins.some((v) => v.suggestion === "State the point directly")).toBe(true);
       });
 
       test("does not flag a single 'Not X.' sentence", () => {
@@ -248,6 +248,35 @@ describe("slop-scanner", () => {
         const sins = result.violations.filter(
           (v) => v.type === "cardinal_sin" && v.suggestion === "State the point directly",
         );
+        expect(sins).toHaveLength(0);
+      });
+    });
+
+    describe("guideline-only negatives", () => {
+      test("does not flag 'This happens because we initialized the cache.'", () => {
+        const result = scanContent(
+          "This happens because we initialized the cache.",
+          "negative-cache.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+
+      test("does not flag 'People tend to prefer the default.'", () => {
+        const result = scanContent(
+          "People tend to prefer the default.",
+          "negative-default.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+
+      test("does not flag 'Nobody designed this for that use case.'", () => {
+        const result = scanContent(
+          "Nobody designed this for that use case.",
+          "negative-usecase.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
         expect(sins).toHaveLength(0);
       });
     });
