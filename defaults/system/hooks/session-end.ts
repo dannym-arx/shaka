@@ -22,17 +22,22 @@ import {
   type NormalizedMessage,
   type SessionMetadata,
   buildSummarizationPrompt,
+  compileKnowledge,
   getSummarizationModel,
   hashSessionId,
   inference,
   isSubagent,
+  loadConfig,
   loadLearnings,
   mergeNewLearnings,
   parseClaudeCodeTranscript,
   parseExtractedLearnings,
   parseOpencodeTranscript,
   parseSummaryOutput,
+  projectSlug,
+  readExistingTopicTitles,
   resolveShakaHome,
+  runMaintenance,
   truncateTranscript,
   undoSessionLearnings,
   updateRollups,
@@ -241,8 +246,14 @@ async function worker(tmpPath: string) {
   const existingTitles = existingLearnings.map((e) => e.title);
   mark("Loaded existing learnings", t, `${existingTitles.length} titles`);
 
-  // Build prompt (single call produces both summary + learnings)
-  const prompt = buildSummarizationPrompt(truncated, metadata, existingTitles);
+  // Load existing knowledge topic titles for tag convergence (fail-open)
+  t = performance.now();
+  const knowledgeDir = join(memoryDir, "knowledge", projectSlug(cwd));
+  const existingTopicTitles = await readExistingTopicTitles(knowledgeDir);
+  mark("Loaded topic titles", t, `${existingTopicTitles.length} topics`);
+
+  // Build prompt (single call produces summary + learnings + knowledge)
+  const prompt = buildSummarizationPrompt(truncated, metadata, existingTitles, existingTopicTitles);
 
   // Call inference
   const model = await getSummarizationModel(provider);
@@ -284,8 +295,8 @@ async function worker(tmpPath: string) {
 
   // Extract and write learnings (fail-open: summary already written)
   t = performance.now();
-  await extractAndWriteLearnings(rawOutput, metadata, memoryDir);
-  mark("Learnings extraction", t);
+  const newLearningsCount = await extractAndWriteLearnings(rawOutput, metadata, memoryDir);
+  mark("Learnings extraction", t, `${newLearningsCount} new`);
 
   // Update rolling summaries (fail-open: session summary already written)
   t = performance.now();
@@ -294,6 +305,55 @@ async function worker(tmpPath: string) {
     console.error(`Rollups update failed: ${err instanceof Error ? err.message : String(err)}`);
   });
   mark("Rollups update", t);
+
+  // Maintenance: consolidation, auto-promote, auto-prune (fail-open)
+  t = performance.now();
+  try {
+    const config = await loadConfig();
+    if (config?.memory?.maintenance?.enabled !== false) {
+      const maintenanceResult = await runMaintenance(memoryDir, cwd, newLearningsCount);
+      if (maintenanceResult.skipped) {
+        mark("Maintenance skipped", t, maintenanceResult.reason ?? "");
+      } else {
+        const detail = [
+          `condensed=${maintenanceResult.condensed ?? 0}`,
+          `promoted=${maintenanceResult.promoted ?? 0}`,
+          `pruned=${maintenanceResult.pruned ?? 0}`,
+        ].join(", ");
+        mark("Maintenance complete", t, detail);
+      }
+    } else {
+      mark("Maintenance disabled", t);
+    }
+  } catch (err) {
+    console.error(`Maintenance failed: ${err instanceof Error ? err.message : String(err)}`);
+    mark("Maintenance failed", t);
+  }
+
+  // Step 6: Knowledge compilation (own gating via manifest delta, fail-open)
+  t = performance.now();
+  try {
+    const config = await loadConfig();
+    if (config?.memory?.knowledge_enabled !== false) {
+      const compilationModel = await getSummarizationModel(provider);
+      const inferFn = async (prompt: string): Promise<string> => {
+        const res = await inference({ userPrompt: prompt, model: compilationModel, timeout: 60000 });
+        if (!res.success || !res.text) throw new Error(res.error ?? "inference failed");
+        return res.text;
+      };
+      const result = await compileKnowledge(memoryDir, cwd, inferFn);
+      if (result.sessionsProcessed === 0) {
+        mark("Knowledge compilation skipped", t, "no unprocessed sessions");
+      } else {
+        mark("Knowledge compilation complete", t, `${result.topicsCreated.length} created, ${result.topicsUpdated.length} updated`);
+      }
+    } else {
+      mark("Knowledge compilation disabled", t);
+    }
+  } catch (err) {
+    console.error(`Knowledge compilation failed: ${err instanceof Error ? err.message : String(err)}`);
+    mark("Knowledge compilation failed", t);
+  }
 
   mark("Session-end worker total", t0, provider);
 
@@ -305,12 +365,13 @@ async function worker(tmpPath: string) {
 /**
  * Extract learnings from inference output and write to learnings.md.
  * Fail-open: any error is logged but does not affect the summary.
+ * Returns the number of learnings extracted (0 on failure).
  */
 async function extractAndWriteLearnings(
   rawOutput: string,
   metadata: SessionMetadata,
   memoryDir: string,
-): Promise<void> {
+): Promise<number> {
   try {
     const sessionHash = hashSessionId(metadata.sessionId);
     const extracted = parseExtractedLearnings(rawOutput, {
@@ -321,7 +382,7 @@ async function extractAndWriteLearnings(
 
     if (extracted.length === 0) {
       console.error("No learnings extracted from this session");
-      return;
+      return 0;
     }
 
     // Load, undo previous extractions from this session, merge new
@@ -331,10 +392,12 @@ async function extractAndWriteLearnings(
 
     await writeLearnings(memoryDir, entries);
     console.error(`Wrote ${extracted.length} learning(s) to learnings.md`);
+    return extracted.length;
   } catch (err) {
     console.error(
       `Learnings extraction failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+    return 0;
   }
 }
 

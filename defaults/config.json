@@ -1,5 +1,5 @@
 {
-  "version": "0.7.2",
+  "version": "0.9.0",
   "reasoning": {
     "enabled": true
   },
@@ -26,7 +26,11 @@
     "learnings_budget": 6000,
     "sessions_budget": 5000,
     "recency_window_days": 90,
-    "search_max_results": 10
+    "search_max_results": 10,
+    "knowledge_enabled": true,
+    "maintenance": {
+      "enabled": true
+    }
   },
   "commands": {
     "disabled": []

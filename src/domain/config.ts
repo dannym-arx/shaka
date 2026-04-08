@@ -39,6 +39,10 @@ export interface ShakaConfig {
     readonly sessions_budget?: number;
     readonly recency_window_days?: number;
     readonly search_max_results?: number;
+    readonly knowledge_enabled?: boolean;
+    readonly maintenance?: {
+      readonly enabled?: boolean;
+    };
   };
   readonly commands?: {
     readonly disabled?: string[];
@@ -253,9 +257,16 @@ export async function ensureConfigComplete(shakaHome: string): Promise<boolean> 
     sessions_budget: 5000,
     recency_window_days: 90,
     search_max_results: 10,
+    knowledge_enabled: true,
+    maintenance: { enabled: true },
   };
   const before = JSON.stringify(config.memory);
-  config.memory = { ...memoryDefaults, ...(config.memory as object) };
+  const existingMemory = (config.memory ?? {}) as Record<string, unknown>;
+  config.memory = {
+    ...memoryDefaults,
+    ...existingMemory,
+    maintenance: { ...memoryDefaults.maintenance, ...(existingMemory.maintenance as object) },
+  };
   if (JSON.stringify(config.memory) !== before) changed = true;
 
   if (changed) {

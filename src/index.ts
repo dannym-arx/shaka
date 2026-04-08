@@ -73,9 +73,22 @@ export {
 export {
   type SessionMetadata,
   type SessionSummary,
+  type KnowledgeFragment,
   buildSummarizationPrompt,
   parseSummaryOutput,
+  parseExtractedKnowledge,
 } from "./memory/summarize";
+
+export {
+  readExistingTopicTitles,
+  loadKnowledgeIndex,
+  compileKnowledge,
+  bootstrapKnowledge,
+  type CompilationResult,
+  type KnowledgeManifest,
+  type BootstrapOptions,
+  type BootstrapResult,
+} from "./memory/knowledge";
 
 export {
   type SummaryIndex,
@@ -111,11 +124,13 @@ export {
   type LearningEntry,
   type LearningCategory,
   type Exposure,
+  ARCHIVE_FILE,
   parseLearnings,
   renderEntry,
   renderLearnings,
   loadLearnings,
   writeLearnings,
+  appendToArchive,
   scoreEntry,
   selectLearnings,
   undoSessionLearnings,
@@ -124,6 +139,18 @@ export {
   parseExtractedLearnings,
   hashSessionId,
 } from "./memory/learnings";
+
+export {
+  type InferenceOptions,
+  type InferenceResult,
+  inference,
+  hasInferenceProvider,
+} from "./inference";
+
+export {
+  type MaintenanceResult,
+  runMaintenance,
+} from "./memory/maintenance";
 
 export {
   type SemVer,
@@ -136,13 +163,6 @@ export {
   findLatestTag,
   findNewerLocalTag,
 } from "./domain/version";
-
-export {
-  type InferenceOptions,
-  type InferenceResult,
-  inference,
-  hasInferenceProvider,
-} from "./inference";
 
 export {
   matchesPattern,
