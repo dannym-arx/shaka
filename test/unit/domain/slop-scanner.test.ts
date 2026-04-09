@@ -91,6 +91,21 @@ describe("slop-scanner", () => {
       expect(smartQuotes.length).toBeGreaterThanOrEqual(2);
     });
 
+    test("detects Unicode arrows", () => {
+      const result = scanContent(
+        "Click here \u2192 to continue, then \u21D2 profit.",
+        "arrows.md",
+      );
+      const arrows = result.violations.filter((v) => v.text === "Unicode arrow detected");
+      expect(arrows.length).toBe(2);
+      expect(arrows[0]!.type).toBe("ai_tell");
+      expect(arrows[0]!.suggestion).toBe('Use "to", a plain hyphen, or rewrite the sentence');
+      expect(arrows[0]!.line).toBe(1);
+      expect(arrows[0]!.column).toBe(12);
+      expect(arrows[1]!.line).toBe(1);
+      expect(arrows[1]!.column).toBe(32);
+    });
+
     test("heavily sloppy content fails review", () => {
       const result = scanContent(
         "In today's rapidly evolving digital landscape, we must leverage robust and seamless solutions " +
@@ -167,6 +182,103 @@ describe("slop-scanner", () => {
       );
       expect(result.slopDensity).toBeGreaterThan(0);
       expect(result.wordCount).toBeGreaterThan(0);
+    });
+
+    describe("negative parallelism cardinal sin", () => {
+      test("flags 'It's not X, it's Y' pattern", () => {
+        const result = scanContent(
+          "It's not a bug, it's a feature. It's not slow, it's thoughtful.",
+          "parallelism.md",
+        );
+        const sins = result.violations.filter(
+          (v) => v.type === "cardinal_sin" && v.text.toLowerCase().includes("it"),
+        );
+        expect(sins.length).toBeGreaterThanOrEqual(1);
+        expect(sins.some((v) => v.suggestion === "State the positive directly")).toBe(true);
+      });
+
+      test("does not flag factual negations with 'it'", () => {
+        const result = scanContent(
+          "It's not raining outside. It's not worth the risk.",
+          "not-parallelism.md",
+        );
+        // "It's not raining" has no ", it's" continuation so should not fire
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+    });
+
+    describe("negative reframe cardinal sin", () => {
+      test("flags reframing nouns: question, problem, issue", () => {
+        const result = scanContent(
+          "The question isn't whether to ship. The problem isn't the budget.",
+          "reframe.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins.length).toBeGreaterThanOrEqual(2);
+        expect(sins.some((v) => v.suggestion === "State what it IS, not what it isn't")).toBe(true);
+      });
+
+      test("does not flag factual negations like 'The car isn't running'", () => {
+        const result = scanContent(
+          "The car isn't running. The test isn't passing. The button isn't responding.",
+          "not-reframe.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+    });
+
+    describe("dramatic countdown cardinal sin", () => {
+      test("flags 'Not X. Not Y.' countdown pattern", () => {
+        const result = scanContent(
+          "Not a bug. Not a feature. A fundamental design flaw that nobody wanted to address.",
+          "countdown.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins.length).toBeGreaterThanOrEqual(1);
+        expect(sins.some((v) => v.suggestion === "State the point directly")).toBe(true);
+      });
+
+      test("does not flag a single 'Not X.' sentence", () => {
+        const result = scanContent(
+          "Not all configurations require this setting.",
+          "not-countdown.md",
+        );
+        const sins = result.violations.filter(
+          (v) => v.type === "cardinal_sin" && v.suggestion === "State the point directly",
+        );
+        expect(sins).toHaveLength(0);
+      });
+    });
+
+    describe("guideline-only negatives", () => {
+      test("does not flag 'This happens because we initialized the cache.'", () => {
+        const result = scanContent(
+          "This happens because we initialized the cache.",
+          "negative-cache.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+
+      test("does not flag 'People tend to prefer the default.'", () => {
+        const result = scanContent(
+          "People tend to prefer the default.",
+          "negative-default.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
+
+      test("does not flag 'Nobody designed this for that use case.'", () => {
+        const result = scanContent(
+          "Nobody designed this for that use case.",
+          "negative-usecase.md",
+        );
+        const sins = result.violations.filter((v) => v.type === "cardinal_sin");
+        expect(sins).toHaveLength(0);
+      });
     });
 
     test("score does not go below 0", () => {
